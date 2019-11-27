@@ -36,44 +36,53 @@ count_frag_ol_ref <-function (query_fragments,
     rownames(out) <- names(target_GRanges)
   }
 
-  fragment_counts <- mclapply(1:length(fragments),
-                              function(frags) {
-                                ol <- GenomicRanges::countOverlaps(target_GRanges,
-                                                                   fragments[[frags]])
-                                frag_name <- names(fragments)[frags]
+  count_frags <- function(frags) {
+    ol <- GenomicRanges::countOverlaps(target_GRanges,
+                                       fragments[[frags]])
+    frag_name <- names(fragments)[frags]
 
-                                if(aggregate) {
-                                  if(binarize) {
-                                    total_count = sum(ol > 0)
-                                  } else {
-                                    total_count = sum(ol)
-                                  }
-                                  list(fragment_name = frag_name,
-                                       total_count = total_count)
-                                } else {
-                                  if (sparse) {
-                                    i <- which(ol > 0)
-                                    new_count <- length(i)
-                                    if(binarize) {
-                                      x <- rep(1, new_count)
-                                    } else {
-                                      x <- ol[i]
-                                    }
-                                    i <- i - 1L
-                                    list(fragment_name = frag_name,
-                                         x = x,
-                                         i = i,
-                                         n_vals = new_count)
-                                  } else {
-                                    if(binarize) {
-                                      ol[ol > 0] <- 1
-                                    }
-                                    list(fragment_name = frag_name,
-                                         counts = ol)
-                                  }
-                                }
-                              },
+    if(aggregate) {
+      if(binarize) {
+        total_count = sum(ol > 0)
+      } else {
+        total_count = sum(ol)
+      }
+      list(fragment_name = frag_name,
+           total_count = total_count)
+    } else {
+      if (sparse) {
+        i <- which(ol > 0)
+        new_count <- length(i)
+        if(binarize) {
+          x <- rep(1, new_count)
+        } else {
+          x <- ol[i]
+        }
+        i <- i - 1L
+        list(fragment_name = frag_name,
+             x = x,
+             i = i,
+             n_vals = new_count)
+      } else {
+        if(binarize) {
+          ol[ol > 0] <- 1
+        }
+        list(fragment_name = frag_name,
+             counts = ol)
+      }
+    }
+  }
+
+  if(n_threads > 1) {
+    fragment_counts <- mclapply(1:length(fragments),
+                                count_frags,
+                                mc.cores = n_threads)
+  } else {
+    fragment_counts <- lapply(1:length(fragments),
+                              count_frags,
                               mc.cores = n_threads)
+  }
+
 
   if(aggregate) {
     for(fc in 1:length(fragment_counts)) {
