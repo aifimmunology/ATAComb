@@ -1,0 +1,11 @@
+Package: ATAComb
+Type: Package
+Title: QC and Analysis of scATAC-seq data
+Version: 0.0.1
+Author: Lucas Graybuck <lucasg@alleninstitute.org>
+Maintainer: Lucas Graybuck <lucasg@alleninstitute.org>
+Description: Functions and Rmarkdown files for QC and analysis of scATAC-seq datasets.
+License: Allen Institute Software License
+Encoding: UTF-8
+LazyData: true
+RoxygenNote: 6.1.1
