@@ -13,6 +13,7 @@ Depends:
   Matrix
 Imports:
   igraph,
+  IRanges,
   Matrix,
   parallel,
   RANN
