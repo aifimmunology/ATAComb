@@ -16,7 +16,7 @@ atac_lsi <- function(atac_matrix,
   ncounts <- atac_matrix[num_cells_ncounted >= threshold,]
 
   ## Normalize the data with TF-IDF
-  nfreqs <- t(t(ncounts) / Matrix::colSums(ncounts))
+  nfreqs <- Matrix::t(Matrix::t(ncounts) / Matrix::colSums(ncounts))
   nfreqs@x <- log1p(nfreqs@x * 1e5)
 
   tf_idf_counts <- nfreqs * log(1 + ncol(ncounts) / Matrix::rowSums(ncounts))
@@ -28,7 +28,7 @@ atac_lsi <- function(atac_matrix,
   SVD <- irlba::irlba(tf_idf_counts, 50, 50, maxit=1000)
   d_diag <- matrix(0, nrow=length(SVD$d), ncol=length(SVD$d))
   diag(d_diag) <- SVD$d
-  SVD_vd <- t(d_diag %*% t(SVD$v))
+  SVD_vd <- Matrix::t(d_diag %*% Matrix::t(SVD$v))
   rownames(SVD_vd) <- colnames(atac_matrix)
   colnames(SVD_vd) <- paste0('pca_', 1:ncol(SVD_vd))
 
