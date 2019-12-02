@@ -41,7 +41,7 @@ atac_lsi <- function(atac_matrix,
 #'
 #' @return a sparse matrix of Jaccard distances.
 #' @export
-jaccard <-  function(m) {
+sparse_jaccard <-  function(m) {
 
   # common values:
   A <- Matrix::tcrossprod(m)

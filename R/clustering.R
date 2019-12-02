@@ -42,7 +42,7 @@ atac_clustering <- function(lsi_mat,
                                   j = knn.df[[2]],
                                   x = 1)
 
-  jaccard.adj  <- jaccard(knn.mat)
+  jaccard.adj  <- sparse_jaccard(knn.mat)
   jaccard.gr <- igraph::graph.adjacency(jaccard.adj,
                                         mode = "undirected",
                                         weighted = TRUE)

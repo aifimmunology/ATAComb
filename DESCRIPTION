@@ -12,6 +12,7 @@ Depends:
   data.table,
   Matrix
 Imports:
+  assertthat,
   igraph,
   IRanges,
   Matrix,
@@ -19,3 +20,5 @@ Imports:
   RANN
 LazyData: true
 RoxygenNote: 6.1.1
+Suggests: 
+    testthat
