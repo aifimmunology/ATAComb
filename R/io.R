@@ -23,13 +23,16 @@ read_10x_fragments <- function(outs_dir,
   singlecell <- singlecell[passed_filters >= min_reads,]
 
   if(verbose) {cat("reading fragments.tsv.gz\n")}
-  fragments <- data.table::fread(fragments_file)
+  fragments <- vroom::vroom(fragments_file,
+                            delim = "\t",
+                            col_names = c("chr","start","end","barcode","n_reads"),
+                            col_types = c(chr = "c", start = "i", end = "i", barcode = "c", n_reads = "-"))
 
   if(verbose) {cat("filtering fragments.tsv.gz\n")}
-  fragments <- fragments[V4 %in% singlecell$barcode,]
+  fragments <- fragments[fragments$barcode %in% singlecell$barcode,]
 
   if(verbose) {cat("splitting fragments by barcode\n")}
-  split_fragments <- split(fragments, fragments$V4)
+  split_fragments <- split(fragments, fragments$barcode)
 
   return(split_fragments)
 }
