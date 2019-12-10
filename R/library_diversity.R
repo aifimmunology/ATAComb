@@ -15,8 +15,6 @@ tenx_atac_freq <- function(fragments_tsv,
   metrics_table <- read.csv(summary_csv,
                             stringsAsFactors = FALSE)
 
-
-
   cat("reading counts\n")
 
   fragments <- vroom::vroom(fragments_tsv,
@@ -27,19 +25,18 @@ tenx_atac_freq <- function(fragments_tsv,
 
   cat("computing frequencies\n")
 
-  if(!is.null(keep_barcodes)){
+  if(!is.null(keep_barcodes)) {
     fragments <- fragments[fragments$barcode %in% keep_barcodes,]
-    freqs <- table(fragments$n_reads)
-  } else {
-    freqs <- table(fragments$n_reads)
   }
+
+  freqs <- table(fragments$n_reads)
 
   freq_mat <- matrix(c(as.numeric(names(freqs)),
                        freqs),
                      ncol = 2)
 
-  total_counts <- sum(freq_mat[,2])
-  total_umis <- nrow(fragments)
+  total_counts <- sum(freq_mat[,1] * freq_mat[,2])
+  total_umis <- sum(freq_mat[,2])
   total_reads <- as.numeric(metrics_table$num_fragments)
 
   cat("assembling results\n")
