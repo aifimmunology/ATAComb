@@ -17,7 +17,9 @@ Imports:
   IRanges,
   Matrix,
   parallel,
-  RANN
+  preseqR,
+  RANN,
+  vroom
 LazyData: true
 RoxygenNote: 6.1.1
 Suggests: 
