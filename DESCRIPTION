@@ -10,7 +10,8 @@ Encoding: UTF-8
 Depends:
   GenomicRanges,
   data.table,
-  Matrix
+  Matrix,
+  rhdf5
 Imports:
   assertthat,
   igraph,
