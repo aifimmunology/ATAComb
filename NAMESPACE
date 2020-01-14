@@ -3,7 +3,7 @@
 export(atac_clustering)
 export(atac_lsi)
 export(convert_fragments_gr)
-export(convert_fragments_windowmat)
+export(convert_fragments_windows)
 export(count_frag_ol_ref)
 export(diversity_projection)
 export(fragments_to_window_counts)

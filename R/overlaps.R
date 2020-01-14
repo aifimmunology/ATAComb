@@ -16,30 +16,30 @@ count_frag_ol_ref <-function (query_fragments,
                               aggregate = FALSE,
                               n_threads = 1) {
 
-  if(class(fragments) != "list") {
-    fragments <- list(query_fragments = fragments)
+  if(class(query_fragments) != "list") {
+    query_fragments <- list(query_fragments = query_fragments)
   }
 
   if (aggregate) {
-    out <- vector(length(fragments))
-    names(out) <- names(fragments)
+    out <- vector(length(query_fragments))
+    names(out) <- names(query_fragments)
   } else {
     if (sparse) {
       out <- Matrix::sparseMatrix(i = integer(0),
                                   j = integer(0),
                                   dims = c(length(target_GRanges),
-                                           length(fragments)))
+                                           length(query_fragments)))
       out <- as(out, "dgCMatrix")
     } else {
-      out <- matrix(nrow = length(target_GRanges), ncol = length(fragments))
+      out <- matrix(nrow = length(target_GRanges), ncol = length(query_fragments))
     }
     rownames(out) <- names(target_GRanges)
   }
 
   count_frags <- function(frags) {
     ol <- GenomicRanges::countOverlaps(target_GRanges,
-                                       fragments[[frags]])
-    frag_name <- names(fragments)[frags]
+                                       query_fragments[[frags]])
+    frag_name <- names(query_fragments)[frags]
 
     if(aggregate) {
       if(binarize) {
@@ -74,11 +74,11 @@ count_frag_ol_ref <-function (query_fragments,
   }
 
   if(n_threads > 1) {
-    fragment_counts <- mclapply(1:length(fragments),
+    fragment_counts <- mclapply(1:length(query_fragments),
                                 count_frags,
                                 mc.cores = n_threads)
   } else {
-    fragment_counts <- lapply(1:length(fragments),
+    fragment_counts <- lapply(1:length(query_fragments),
                               count_frags,
                               mc.cores = n_threads)
   }
@@ -108,7 +108,7 @@ count_frag_ol_ref <-function (query_fragments,
     }
 
     colnames(out) <- frag_names
-    out <- out[, names(fragments)]
+    out <- out[, names(query_fragments)]
   }
 
   return(out)

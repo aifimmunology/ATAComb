@@ -85,10 +85,10 @@ convert_fragments_gr <- function(fragments,
 #'
 #' @return a list of GRanges objects
 #' @export
-convert_fragments_windowmat <- function(fragments,
-                                        window_size = 5e3,
-                                        genome = "hg38",
-                                        n_threads = 1) {
+convert_fragments_windows <- function(fragments,
+                                      window_size = 5e3,
+                                      genome = "hg38",
+                                      n_threads = 1) {
 
   chrom_sizes <- read_chrom_sizes(genome = genome)
 
