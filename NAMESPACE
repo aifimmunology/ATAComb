@@ -2,6 +2,9 @@
 
 export(atac_clustering)
 export(atac_lsi)
+export(atac_lsi_projection)
+export(atac_svd)
+export(atac_tf_idf)
 export(convert_fragments_gr)
 export(convert_fragments_windows)
 export(count_frag_ol_ref)
