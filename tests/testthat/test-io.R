@@ -8,7 +8,8 @@ test_that(
   {
     tenx_dir <- system.file("testdata/outs", package = "ATAComb")
 
-    test_fragments <- read_10x_fragments(outs_dir = tenx_dir,
+    test_fragments <- read_10x_fragments(fragments_tsv = file.path(tenx_dir,"fragments.tsv.gz"),
+                                         singlecell_csv = file.path(tenx_dir,"singlecell.csv"),
                                          min_reads = 1000,
                                          remove_chrM = TRUE,
                                          verbose = FALSE)
@@ -30,7 +31,8 @@ test_that(
 
 tenx_dir <- system.file("testdata/outs", package = "ATAComb")
 
-test_fragments <- read_10x_fragments(outs_dir = tenx_dir,
+test_fragments <- read_10x_fragments(fragments_tsv = file.path(tenx_dir,"fragments.tsv.gz"),
+                                     singlecell_csv = file.path(tenx_dir,"singlecell.csv"),
                                      min_reads = 1000,
                                      remove_chrM = TRUE,
                                      verbose = FALSE)

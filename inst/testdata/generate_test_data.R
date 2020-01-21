@@ -34,3 +34,6 @@ fwrite(fragments,
        "inst/testdata/outs/fragments.tsv.gz",
        col.names = FALSE,
        sep = "\t")
+
+file.copy(file.path(outs_dir,"summary.csv"),
+          "inst/testdata/outs/summary.csv")

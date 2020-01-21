@@ -127,7 +127,7 @@ atac_lsi_projection <- function(query_tf_idf,
                                 target_svd) {
 
   common_features <- intersect(rownames(query_tf_idf),
-                               rownames(target_tf_idf))
+                               rownames(target_svd$feature_loadings))
 
   query_tf_idf <- query_tf_idf[common_features,]
   target_loadings <- target_svd$feature_loadings[common_features,]
