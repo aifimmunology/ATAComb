@@ -132,8 +132,8 @@ atac_lsi_projection <- function(query_tf_idf,
   query_tf_idf <- query_tf_idf[common_features,]
   target_loadings <- target_svd$feature_loadings[common_features,]
 
-  query_projection <- t(crossprod(target_loadings,
-                                  query_tf_idf))
+  query_projection <- Matrix::tcrossprod(target_loadings,
+                                         query_tf_idf)
 
   colnames(query_projection) <- colnames(target_svd$pcs)
 
