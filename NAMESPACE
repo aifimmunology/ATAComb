@@ -2,6 +2,7 @@
 
 export(atac_clustering)
 export(atac_lsi)
+export(atac_lsi_cca)
 export(atac_lsi_projection)
 export(atac_svd)
 export(atac_tf_idf)
