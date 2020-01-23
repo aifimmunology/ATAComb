@@ -37,3 +37,4 @@ fwrite(fragments,
 
 file.copy(file.path(outs_dir,"summary.csv"),
           "inst/testdata/outs/summary.csv")
+

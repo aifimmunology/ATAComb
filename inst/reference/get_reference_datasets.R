@@ -1,5 +1,6 @@
 library(data.table)
 library(GenomicRanges)
+library(rtracklayer)
 
 ## UCSC Genome Browser chrom.sizes files:
 genomes <- c("hg19","hg38","mm10","mm9")
@@ -37,4 +38,24 @@ temp_file <- tempfile(fileext = ".bed.gz")
 download.file("https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE123577&format=file&file=GSE123577%5Fpbmc%5Fpeaks%2Ebed%2Egz",
               temp_file)
 
+temp_chain <- tempfile(fileext = ".over.chain")
+R.utils::gunzip("inst/reference/hg19ToHg38.over.chain.gz",
+                temp_chain,
+                remove = FALSE)
 
+ch <- import.chain(temp_chain)
+
+hg19_peaks <- fread(temp_file)
+names(hg19_peaks) <- c("chr","start","end")
+hg19_gr <- convert_fragments_gr(list(hg19_peaks))[[1]]
+
+hg38_lo <- liftOver(hg19_gr, ch)
+n_lo <- elementNROWS(hg38_lo)
+
+keep_lo <- n_lo == 1
+
+hg38_gr <- unlist(hg38_lo[keep_lo])
+hg19_gr <- hg19_gr[keep_lo]
+
+saveRDS(hg19_gr, "inst/reference/hg19_GSE123577_filtered_gr.rds")
+saveRDS(hg38_gr, "inst/reference/hg38_GSE123577_filtered_gr.rds")
