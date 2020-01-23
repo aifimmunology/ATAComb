@@ -79,8 +79,7 @@ count_frag_ol_ref <-function (query_fragments,
                                 mc.cores = n_threads)
   } else {
     fragment_counts <- lapply(1:length(query_fragments),
-                              count_frags,
-                              mc.cores = n_threads)
+                              count_frags)
   }
 
 
