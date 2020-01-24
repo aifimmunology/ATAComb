@@ -90,28 +90,33 @@ convert_fragments_windows <- function(fragments,
                                       genome = "hg38",
                                       n_threads = 1) {
 
-  chrom_sizes <- read_chrom_sizes(genome = genome)
+  chrom_sizes <- read_chrom_sizes(genome = genome,
+                                  window_size = window_size)
 
   if(n_threads == 1) {
     window_counts <- lapply(fragments,
                             fragments_to_window_counts,
-                            chrom_sizes)
+                            chrom_sizes,
+                            window_size = window_size)
   } else {
     starting_order <- names(fragments)
     window_counts <- parallel::mclapply(fragments,
                                         fragments_to_window_counts,
                                         chrom_sizes,
+                                        window_size = window_size,
                                         mc.cores = n_threads)
   }
 
   window_n_fragments <- unlist(lapply(window_counts, length))
+
+  window_name_base <- paste("windows",genome,window_size,sep = "_")
 
   sparseMatrix(x = as.numeric(unlist(window_counts)),
                i = as.numeric(unlist(lapply(window_counts, names))),
                p = c(0, cumsum(window_n_fragments)),
                dim = c(sum(chrom_sizes$n_windows),
                        length(fragments)),
-               dimnames = list(NULL,
+               dimnames = list(paste0(window_name_base, 1:sum(chrom_sizes$n_windows)),
                                names(fragments)))
 
 }
@@ -140,7 +145,7 @@ read_chrom_sizes <- function(genome = "hg38",
                             stringsAsFactors = FALSE)
 
   chrom_sizes$n_windows <- ceiling(chrom_sizes$size / window_size)
-  chrom_sizes$offset <- c(0, cumsum(chrom_sizes$n_windows)[-nrow(chrom_sizes)])
+  chrom_sizes$offset <- c(0, cumsum(chrom_sizes$n_windows)[-nrow(chrom_sizes)] + 1)
 
   chrom_sizes
 }
