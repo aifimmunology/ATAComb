@@ -1,6 +1,7 @@
 library(data.table)
 library(GenomicRanges)
 library(rtracklayer)
+library(tidyr)
 
 ## UCSC Genome Browser chrom.sizes files:
 genomes <- c("hg19","hg38","mm10","mm9")
@@ -59,3 +60,48 @@ hg19_gr <- hg19_gr[keep_lo]
 
 saveRDS(hg19_gr, "inst/reference/hg19_GSE123577_filtered_gr.rds")
 saveRDS(hg38_gr, "inst/reference/hg38_GSE123577_filtered_gr.rds")
+
+## TSS regions: ENSEMBL Hg38 v93
+## Couldn't download directly, so downloaded through browser from:
+## ftp://ftp.ensembl.org/pub/release-93/gtf/homo_sapiens/
+
+gtf <- fread("C:/Users/lucasg/Downloads/Homo_sapiens.GRCh38.93.gtf.gz")
+names(gtf) <- c("seqname","source","feature","start","end","score","strand","frame","attribute")
+gtf <- gtf[feature == "gene"]
+
+gtf$attribute <- gsub(" ?[a-z|_]+ \"([A-Za-z0-9|_|-]+)\"",
+                      "\\1",
+                      gtf$attribute)
+
+gtf <- separate(gtf,
+                attribute,
+                sep = ";",
+                into = c("gene_id","gene_version","gene_name","gene_source","gene_biotype"))
+
+temp_file <- tempfile(fileext = ".h5")
+download.file("http://cf.10xgenomics.com/samples/cell-exp/3.0.2/5k_pbmc_v3/5k_pbmc_v3_filtered_feature_bc_matrix.h5",
+              temp_file, mode = "wb")
+
+tenx_feat <- H5weaver::read_h5_feature_meta(temp_file)
+tenx_ensembl <- tenx_feat$id
+
+keep_gtf <- gtf[gene_id %in% tenx_ensembl]
+
+fwrite(keep_gtf,
+       "inst/reference/hg38_ensemble93_tenx_genes.tsv.gz")
+
+gene_gr <- GRanges(seqnames = paste0("chr",gtf$seqname),
+                   ranges = IRanges(start = gtf$start,
+                           end = gtf$end),
+                   strand = gtf$strand,
+                   gene_id = gtf$gene_id,
+                   gene_name = gtf$gene_name)
+saveRDS(gene_gr,
+        "inst/reference/hg38_ensemble93_gene_bodies_gr.rds")
+
+tss_2kb_gr <- resize(gene_gr,
+                     width = 4e3,
+                     fix = "start")
+saveRDS(gene_gr,
+        "inst/reference/hg38_ensemble93_tss_2kb_gr.rds")
+
