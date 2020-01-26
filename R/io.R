@@ -108,15 +108,23 @@ convert_fragments_windows <- function(fragments,
   }
 
   window_n_fragments <- unlist(lapply(window_counts, length))
+  n_windows <- sum(chrom_sizes$n_windows)
 
-  window_name_base <- paste("windows",genome,window_size,sep = "_")
+  window_positions <- window_index_to_bed(1:n_windows,
+                                          chrom_sizes = chrom_sizes,
+                                          window_size = window_size)
+
+  window_positions <- paste(window_positions$chr,
+                            window_positions$start,
+                            window_positions$end,
+                            sep = "_")
 
   sparseMatrix(x = as.numeric(unlist(window_counts)),
                i = as.numeric(unlist(lapply(window_counts, names))),
                p = c(0, cumsum(window_n_fragments)),
-               dim = c(sum(chrom_sizes$n_windows),
+               dim = c(n_windows,
                        length(fragments)),
-               dimnames = list(paste0(window_name_base, 1:sum(chrom_sizes$n_windows)),
+               dimnames = list(window_positions,
                                names(fragments)))
 
 }
@@ -145,7 +153,7 @@ read_chrom_sizes <- function(genome = "hg38",
                             stringsAsFactors = FALSE)
 
   chrom_sizes$n_windows <- ceiling(chrom_sizes$size / window_size)
-  chrom_sizes$offset <- c(0, cumsum(chrom_sizes$n_windows)[-nrow(chrom_sizes)] + 1)
+  chrom_sizes$offset <- c(0, cumsum(chrom_sizes$n_windows)[-nrow(chrom_sizes)])
 
   chrom_sizes
 }
@@ -163,7 +171,7 @@ fragments_to_window_counts <- function(fragment_dt,
                                        window_size = 5e3) {
 
   centers <- (fragment_dt$end + fragment_dt$start)/2
-  chr_windows <- floor(centers / window_size)
+  chr_windows <- ceiling(centers / window_size)
 
   adj_windows <- chr_windows + chrom_sizes$offset[match(fragment_dt[[1]], chrom_sizes$chr)]
 
@@ -182,15 +190,27 @@ window_index_to_bed <- function(window_indexes,
                                 chrom_sizes,
                                 window_size = 5e3) {
 
-  chr_bin <- as.numeric(cut(window_indexes, chrom_sizes$offset))
+  chr_bin <- as.numeric(cut(x = window_indexes,
+                            breaks = chrom_sizes$offset,
+                            right = FALSE))
   chr <- chrom_sizes$chr[chr_bin]
 
   chr_windows <- window_indexes - chrom_sizes$offset[chr_bin]
 
-  data.table::data.table(chr = chr,
-                         start = chr_windows * window_size,
-                         end = (chr_windows + 1) * window_size)
+  bed <- data.table::data.table(chr = chr,
+                         start = (chr_windows - 1) * window_size + 1,
+                         end = chr_windows * window_size)
 
+  chr_ends <- which(window_indexes %in% (chrom_sizes$offset))
+
+  if(length(chr_ends) > 0) {
+    end_chr <- chr[chr_ends]
+    offset_idx <- match(window_indexes[chr_ends], chrom_sizes$offset) - 1
+
+    bed$end[chr_ends] <- chrom_sizes$size[offset_idx]
+  }
+
+  bed
 }
 
 #' Convert a vector of window indexes to GenomicRanges positions for each window.

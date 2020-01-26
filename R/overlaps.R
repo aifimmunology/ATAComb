@@ -21,7 +21,7 @@ count_frag_ol_ref <-function (query_fragments,
   }
 
   if (aggregate) {
-    out <- vector(length(query_fragments))
+    out <- integer(length(query_fragments))
     names(out) <- names(query_fragments)
   } else {
     if (sparse) {
@@ -111,4 +111,66 @@ count_frag_ol_ref <-function (query_fragments,
   }
 
   return(out)
+}
+
+#' Filter a GenomicRanges object against another GenomicRanges object
+#'
+#' @param fragment_list The list object containing GenomicRanges objects
+#' @param target_gr The GenomicRanges object to use for filtering.
+#' @param mode Whether to "remove" or "keep" overlaps. Default is "remove"
+#' @param ignore_strand Logical, whether or not to ignore the strand of regions in the comparison
+#'
+#' @return A filtered GenomicRanges object.
+#' @export
+filter_gr <- function(query_gr,
+                      target_gr,
+                      mode = "remove",
+                      ignore.strand = TRUE) {
+
+  overlapping_fragments <- unique(
+    GenomicRanges::queryHits(
+      GenomicRanges::findOverlaps(query_gr,
+                                  target_gr,
+                                  ignore.strand = ignore_strand)))
+
+  if(mode == "remove") {
+    query_gr[-overlapping_fragments]
+  } else if(mode == "keep") {
+    query_gr[overlapping_fragments]
+  }
+}
+
+#' Filter a list of GenomicRanges objects against a single GenomicRanges object
+#'
+#' @param fragment_list The list object containing GenomicRanges objects
+#' @param target_gr The GenomicRanges object to use for filtering.
+#' @param mode Whether to "remove" or "keep" overlaps. Default is "remove"
+#' @param ignore_strand Logical, whether or not to ignore the strand of regions in the comparison
+#' @param n_threads A numeric object specifying the number of threads to use. Default is 1.
+#'
+#' @return A list object containing filtered GenomicRanges objects.
+#' @export
+filter_fragments <- function(fragment_list,
+                             target_gr,
+                             mode = "remove",
+                             ignore_strand = TRUE,
+                             n_threads = 1) {
+
+  if(n_threads == 1) {
+    out_list <- lapply(fragment_list,
+                       filter_gr,
+                       target_gr = target_gr,
+                       mode = mode,
+                       ignore_strand = ignore_strand)
+  } else {
+    out_list <- mclapply(fragment_list,
+                         filter_gr,
+                         target_gr = target_gr,
+                         mode = mode,
+                         ignore_strand = ignore_strand,
+                         mc.cores = n_threads)
+  }
+
+  names(out_list) <- names(fragment_list)
+  out_list
 }
