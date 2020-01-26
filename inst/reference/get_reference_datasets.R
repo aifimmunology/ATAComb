@@ -102,6 +102,6 @@ saveRDS(gene_gr,
 tss_2kb_gr <- resize(gene_gr,
                      width = 4e3,
                      fix = "start")
-saveRDS(gene_gr,
+saveRDS(tss_2kb_gr,
         "inst/reference/hg38_ensemble93_tss_2kb_gr.rds")
 
