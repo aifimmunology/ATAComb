@@ -15,6 +15,7 @@ params:
   in_key: NULL
   in_well: NULL
   out_dir: NULL
+  n_threads: NULL
 ---
 
 <a id="contents"></a>
@@ -29,10 +30,10 @@ params:
 
 #### [QC Metrics and Plots](#qc_metrics)
 - [Well-Based QC](#well_qc)
-  - [10x Genomics Metrics](#well_metrics)
-  - [Read/UMI/Gene Stats](#rug_stats)
-  - [Read/UMI/Gene Histograms](#rug_hists)
-  - [Read/UMI/Gene Scatters](#rug_scatters)
+- [10x Genomics Metrics](#well_metrics)
+- [Read/UMI/Gene Stats](#rug_stats)
+- [Read/UMI/Gene Histograms](#rug_hists)
+- [Read/UMI/Gene Scatters](#rug_scatters)
 - [Write QC JSON](#json_out)
 
 #### [Session Info](#session_info)
@@ -69,12 +70,13 @@ stm("Starting scATAC-seq preprocessing")
 #### Argument parsing
 ```{r Parse arguments}
 if(is.null(params$in_h5)) {
-  in_fra <- system.file("testdata/outs/fragments.tsv.gz", package = "H5weaver")
-  in_sin <- system.file("testdata/outs/singlecell.csv", package = "H5weaver")
-  in_sum <- system.file("testdata/outs/summary.csv", package = "H5weaver")
-  in_key <- system.file("testdata/SampleSheet.csv", package = "H5weaver")
+  in_fra <- system.file("testdata/outs/fragments.tsv.gz", package = "ATAComb")
+  in_sin <- system.file("testdata/outs/singlecell.csv", package = "ATAComb")
+  in_sum <- system.file("testdata/outs/summary.csv", package = "ATAComb")
+  in_key <- system.file("reference/SampleSheet_fallback.csv", package = "H5weaver")
   in_well <- "B000-P0C0W0"
   out_dir <- tempdir()
+  n_threads <- ceiling(parallel::detectCores()/2)
 } else {
   in_fra <- params$in_fra
   in_sin <- params$in_sin
@@ -82,6 +84,7 @@ if(is.null(params$in_h5)) {
   in_key <- params$in_key
   in_well <- params$in_well
   out_dir <- params$out_dir
+  n_threads <- params$n_threads
 }
 
 in_well <- sub("-[AHR]?P","-AP",in_well)
@@ -92,12 +95,23 @@ if(!grepl("^[A-Z][0-9]{3}-AP[0-9]C[0-9]W[0-9]$", in_well)) {
   stop()
 }
 
+# Check N Threads
+if(Sys.info()[["sysname"]] == "Windows") {
+  n_threads <- 1
+} else if(is.null(n_threads)) {
+  n_threads <- ceiling(parallel::detectCores()/2)
+} else {
+  n_threads <- min(n_threads,
+                   parallel::detectCores())
+}
+
 stm(paste0("IN  fragments.tsv.gz : ", in_fra))
 stm(paste0("IN  singlecell.csv   : ", in_sin))
 stm(paste0("IN  summary.csv      : ", in_sum))
 stm(paste0("IN  SampleSheet      : ", in_key))
 stm(paste0("IN  Well ID          : ", in_well))
 stm(paste0("OUT Directory        : ", out_dir))
+stm(paste0("PAR N Threads        : ", n_threads))
 ```
 
 #### Input Parameters
@@ -108,26 +122,27 @@ print(c(
   paste0("IN  summary.csv      : ", in_sum),
   paste0("IN  SampleSheet      : ", in_key),
   paste0("IN  Well ID          : ", in_well),
-  paste0("OUT H5 directory     : ", out_dir)
+  paste0("OUT H5 directory     : ", out_dir),
+  paste0("PAR N Threads        : ", n_threads)
 ))
 ```
 
 #### Check Input Files
 ```{r Check Inputs}
-if(!file.exists(in_h5)) {
-  stm(paste0("ERROR: Cannot find IN H5 file:", in_h5))
+if(!file.exists(in_fra)) {
+  stm(paste0("ERROR: Cannot find IN fragments.tsv.gz:", in_fra))
   stop()
 }
-if(!file.exists(in_mol)) {
-  stm(paste0("ERROR: Cannot find IN Mol Info H5 file:", in_h5))
+if(!file.exists(in_sin)) {
+  stm(paste0("ERROR: Cannot find IN singlecell.csv:", in_sin))
   stop()
 }
 if(!file.exists(in_sum)) {
-  stm(paste0("ERROR: Cannot find IN Metrics Summary file:", in_h5))
+  stm(paste0("ERROR: Cannot find IN summary.csv:", in_sum))
   stop()
 }
-if(!file.exists(in_h5)) {
-  stm(paste0("ERROR: Cannot find IN SampleSheet file:", in_h5))
+if(!file.exists(in_key)) {
+  stm(paste0("ERROR: Cannot find IN SampleSheet file:", in_key))
   stop()
 }
 ```
@@ -148,71 +163,182 @@ if(!dir.exists(out_dir)) {
 
 ### Load inputs
 
-#### Load scRNA-seq Dataset
+#### Load Fragments.tsv
 ```{r Load Query}
-stm(paste0("Loading HDF5 from ", in_h5))
-h5_list <- h5dump(in_h5)
+stm(paste0("Reading fragments from ", in_fra))
+
+fragment_bed_list <- read_10x_fragments(fragments_tsv = in_fra,
+                                        singlecell_csv = in_sin,
+                                        min_reads = 1e3,
+                                        remove_chrM = TRUE,
+                                        verbose = FALSE)
 ```
 
-#### Load SampleSheet
-```{r Load SampleSheet}
-stm(paste0("Reading SampleSheet from ",in_key))
-ss <- read.csv(in_key)
+#### Convert to GRanges
+```{r Convert GRanges}
+stm(paste0("Converting fragment positions to GenomicRanges"))
 
-if("HashTag" %in% names(ss)) {
-  out_h5 <- file.path(out_dir, paste0(in_well, ".h5"))
-  out_json <- sub(".h5$","_well_metrics.json",out_h5)
-
-} else if("WellID" %in% names(ss)) {
-  pool_id <- sub("C.+","",well_id)
-  pool_id <- sub("-[A|H|R]P","-P", well_id)
-  
-  pbmc_sample_id <- ss$SampleID[ss$WellID == in_well]
-  
-  n_cells <- length(h5_list$matrix$barcodes)
-  h5_list <- set_list_path(h5_list,
-                           "/matrix/observations/pbmc_sample_id",
-                           rep(pbc_sample_id, n_cells))
-  
-  out_h5 <- file.path(out_dir, paste0(pool_id, "_", pbmc_sample_id, ".h5"))
-  out_json <- file.path(out_dir, paste0(in_well,"_well_metrics.json"))
-}
-
-
-stm(paste0("OUT H5 file         : ", out_h5))
-stm(paste0("OUT JSON file       : ", out_json))
-
-print(c(
-  paste0("OUT H5 file         : ", out_h5),
-  paste0("OUT JSON file       : ", out_json)
-))
+fragment_gr_list <- convert_fragments_gr(fragments = fragment_bed_list,
+                                         n_threads = n_threads)
 ```
 
-#### Read molecule info to get read counts per cell
-```{r Assemble Read Counts}
-stm(paste0("Assembling Read Counts per Cell from ", in_mol))
+#### Compute overlaps with Altius index
+```{r Altius overlaps}
+stm("Reading Altius Index from ATAComb")
 
-bc <- sub("-1","",h5_list$matrix$barcodes)
+alt_idx_gr <- readRDS(system.file("reference/hg38_alt_dhs_index_gr.rds", package = "ATAComb"))
 
-bc_counts <- data.table(mol_idx = h5read(in_mol, "/barcode_idx"),
-                        umi_count = h5read(in_mol, "/count"))
+stm("Computing overlaps with Altius Index")
 
-bc_sums <- bc_counts[, .(n_reads = sum(umi_count)), by = mol_idx]
-rm(bc_counts)
+alt_ol_mat <- count_frag_ol_ref(query_fragments = fragment_gr_list,
+                                target_GRanges = alt_idx_gr,
+                                binarize = FALSE,
+                                sparse = TRUE,
+                                aggregate = FALSE,
+                                n_threads = n_threads)
 
-mol_bc <- h5read(in_mol, "/barcodes")
-bc_sums$cell_barcode <- mol_bc[bc_sums$mol_idx + 1]
-rm(mol_bc)
-
-bc_sums <- bc_sums[,.(cell_barcode, n_reads)]
-
-n_reads <- bc_sums$n_reads[match(bc, bc_sums$cell_barcode)]
-n_reads[is.na(n_reads)] <- 0
-
-h5_list <- set_list_path(h5_list,
-                           "/matrix/observations/n_reads",
-                           n_reads)
+rownames(alt_ol_mat) <- paste(seqnames(alt_idx_gr),
+                              start(alt_idx_gr),
+                              end(alt_idx_gr),
+                              sep = "_")
 ```
+
+#### Compute overlaps with Buenrostro reference
+```{r Buenrostro overlaps}
+stm("Computing overlaps with Buenrostro reference")
+
+buenro_gr <- readRDS(system.file("reference/hg38_GSE123577_filtered_gr.rds", package = "ATAComb"))
+
+buenro_ol_mat <- count_frag_ol_ref(query_fragments = fragment_gr_list,
+                                   target_GRanges = buenro_gr,
+                                   binarize = FALSE,
+                                   sparse = TRUE,
+                                   aggregate = FALSE,
+                                   n_threads = n_threads)
+
+rownames(buenro_ol_mat) <- paste(seqnames(buenro_gr),
+                                 start(buenro_gr),
+                                 end(buenro_gr),
+                                 sep = "_")
+
+```
+
+#### Gene body and TSS overlaps
+```{r Gene Overlaps}
+stm("Computing overlaps with ENSEMBL reference")
+gene_bodies_gr <- readRDS(system.file("reference/hg38_ensemble93_gene_bodies_gr.rds",
+                                      package = "ATAComb"))
+
+gene_body_ol_mat <- buenro_ol_mat <- count_frag_ol_ref(query_fragments = fragment_gr_list,
+                                                       target_GRanges = gene_bodies_gr,
+                                                       binarize = FALSE,
+                                                       sparse = TRUE,
+                                                       aggregate = FALSE,
+                                                       n_threads = n_threads)
+rownames(gene_body_ol_mat) <- gene_bodies_gr$gene_id
+
+tss_2kb_gr <- readRDS(system.file("reference/hg38_ensemble93_tss_2kb_gr.rds",
+                                   package = "ATAComb"))
+
+tss_2kb_ol_mat <- buenro_ol_mat <- count_frag_ol_ref(query_fragments = fragment_gr_list,
+                                                       target_GRanges = tss_2kb_gr,
+                                                       binarize = FALSE,
+                                                       sparse = TRUE,
+                                                       aggregate = FALSE,
+                                                       n_threads = n_threads)
+rownames(tss_2kb_ol_mat) <- tss_2kb_gr$gene_id
+
+
+```
+
+
+```{r}
+n_reads <- unlist(lapply(fragment_gr_list, length))
+
+ritss <- count_frag_ol_ref(query_fragments = fragment_gr_list,
+                            target_GRanges = tss_2kb_gr,
+                            binarize = TRUE,
+                            sparse = FALSE,
+                            aggregate = TRUE,
+                            n_threads = n_threads)
+
+fritss <- ritss / n_reads
+
+nontss_peak_gr <- filter_gr(buenro_gr,
+                            tss_2kb_gr)
+
+rip <- count_frag_ol_ref(query_fragments = fragment_gr_list,
+                         target_GRanges = nontss_peak_gr,
+                         binarize = TRUE,
+                         sparse = FALSE,
+                         aggregate = TRUE,
+                         n_threads = n_threads)
+
+frip <- rip / n_reads
+
+reduced_alt <- reduce(alt_idx_gr)
+ralt <- count_frag_ol_ref(query_fragments = fragment_gr_list,
+                          target_GRanges = reduced_alt,
+                          binarize = TRUE,
+                          sparse = FALSE,
+                          aggregate = TRUE,
+                          n_threads = n_threads)
+
+fralt <- ralt / n_reads
+```
+
+
+#### Compute Window-based matrix
+```{r Window Matrices}
+stm("Converting fragment positions to windows")
+
+window_5k_mat <- convert_fragments_windows(fragments = fragment_bed_list,
+                                           window_size = 5e3,
+                                           genome = "hg38",
+                                           n_threads = n_threads)
+
+window_20k_mat <- convert_fragments_windows(fragments = fragment_bed_list,
+                                            window_size = 2e4,
+                                            genome = "hg38",
+                                            n_threads = n_threads)
+
+```
+
+```{r}
+window_cov_5k <- colSums(window_5k_mat > 0) / nrow(window_5k_mat)
+window_cov_20k <- colSums(window_20k_mat > 0) / nrow(window_20k_mat)
+```
+
+
+#### Assemble h5 list
+```{r Assemble h5 list}
+h5_list <- list(alt_index_dgCMatrix = alt_ol_mat,
+                buenro_peaks_dgCMatrix = buenro_ol_mat,
+                windows_5k_dgCMatrix = window_5k_mat,
+                windows_20k_dgCMatrix = window_20k_mat)
+
+h5_list <- h5_list_convert_from_dgCMatrix(h5_list, target = "alt_index")
+h5_list <- h5_list_convert_from_dgCMatrix(h5_list, target = "buenro_peaks")
+h5_list <- h5_list_convert_from_dgCMatrix(h5_list, target = "windows_5k")
+h5_list <- h5_list_convert_from_dgCMatrix(h5_list, target = "windows_20k")
+```
+
+#### Add cell ids
+```{r Add cell ids}
+h5_list <- add_cell_ids(h5_list, 
+                        target = "windows_5k",
+                        add_uuid = TRUE,
+                        replace_barcode = TRUE,
+                        retain_original_barcode = TRUE,
+                        add_name = TRUE)
+
+h5_list$alt_index$barcodes <- h5_list$windows_5k$barcodes
+h5_list$buenro_peaks$barcodes <- h5_list$windows_5k$barcodes
+h5_list$windows_20k$barcodes <- h5_list$windows_5k$barcodes
+```
+
+#### Count TSS overlaps
+
 
 [Return to Contents](#contents)
 
@@ -376,11 +502,11 @@ overview_stats$median <- round(overview_stats$median, 2)
 overview_stats$q_75 <- round(overview_stats$q_75, 2)
 
 qc_list$well_count_stats <- lapply(1:nrow(overview_stats),
-                                      function(x) {
-                                        list(q_25 = overview_stats$q_25[x],
-                                             median = overview_stats$median[x],
-                                             q_75 = overview_stats$q_75[x])
-                                      })
+                                   function(x) {
+                                     list(q_25 = overview_stats$q_25[x],
+                                          median = overview_stats$median[x],
+                                          q_75 = overview_stats$q_75[x])
+                                   })
 names(qc_list$well_count_stats) <- tolower(gsub("[\\. ]+", "_", overview_stats$statistic))
 
 qc_table(overview_stats)
