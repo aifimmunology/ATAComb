@@ -1,3 +1,56 @@
+#' Count overlaps between two GRanges objects.
+#'
+#' @param query_fragments A GenomicRanges object or a list of GenomicRanges objects to use as a query
+#' @param target_GRanges A single GenomicRanges object to use as a set of target regions
+#' @param binarize A logical object indicating whether or not to binarize overlaps (count any number of overlaps between query and a given target region as 1). Default is TRUE.
+#' @param sparse A logical object indicating whether the results should be a sparse matrix (TRUE) or a full matrix (FALSE). Default is TRUE.
+#' @param aggregate A logical object indicating whether the results should be aggregated to a vector with the sum of counts for each query to all target regions. Default is FALSE.
+#'
+#' @return If aggregate = TRUE, a vector of counts. If aggregate is FALSE and sparse is FALSE, a vector of values. If sparse is true, a list to use to build a dgCMatrix object.
+#' @export
+count_gr_overlaps <- function(fragments,
+                        target_GRanges,
+                        binarize,
+                        aggregate,
+                        sparse) {
+
+  if(aggregate) {
+    ol <- GenomicRanges::findOverlaps(target_GRanges,
+                                      fragments)
+    if(binarize) {
+      total_count <- length(unique(S4Vectors::subjectHits(ol)))
+    } else {
+      total_count <- length(ol)
+    }
+
+    return(total_count)
+
+  } else {
+    ol <- GenomicRanges::countOverlaps(target_GRanges,
+                                      fragments)
+    if (sparse) {
+      i <- which(ol > 0)
+      new_count <- length(i)
+      if(binarize) {
+        x <- rep(1, new_count)
+      } else {
+        x <- ol[i]
+      }
+      i <- i - 1L
+      list(fragment_name = frag_name,
+           x = x,
+           i = i,
+           n_vals = new_count)
+    } else {
+      if(binarize) {
+        ol[ol > 0] <- 1
+      }
+      ol
+    }
+  }
+}
+
+
 #' Count overlaps between each GRanges object in a list and a single target GRanges object (reference).
 #'
 #' @param query_fragments A GenomicRanges object or a list of GenomicRanges objects to use as a query
@@ -20,76 +73,42 @@ count_frag_ol_ref <-function (query_fragments,
     query_fragments <- list(query_fragments = query_fragments)
   }
 
-  if (aggregate) {
-    out <- integer(length(query_fragments))
-    names(out) <- names(query_fragments)
-  } else {
-    if (sparse) {
-      out <- Matrix::sparseMatrix(i = integer(0),
-                                  j = integer(0),
-                                  dims = c(length(target_GRanges),
-                                           length(query_fragments)))
-      out <- as(out, "dgCMatrix")
-    } else {
-      out <- matrix(nrow = length(target_GRanges), ncol = length(query_fragments))
-    }
+  if (sparse) {
+    out <- Matrix::sparseMatrix(i = integer(0),
+                                j = integer(0),
+                                dims = c(length(target_GRanges),
+                                         length(query_fragments)))
+    out <- as(out, "dgCMatrix")
+    rownames(out) <- names(target_GRanges)
+
+  } else if(!aggregate) {
+    out <- matrix(nrow = length(target_GRanges), ncol = length(query_fragments))
     rownames(out) <- names(target_GRanges)
   }
 
-  count_frags <- function(frags) {
-    ol <- GenomicRanges::countOverlaps(target_GRanges,
-                                       query_fragments[[frags]])
-    frag_name <- names(query_fragments)[frags]
-
-    if(aggregate) {
-      if(binarize) {
-        total_count = sum(ol > 0)
-      } else {
-        total_count = sum(ol)
-      }
-      list(fragment_name = frag_name,
-           total_count = total_count)
-    } else {
-      if (sparse) {
-        i <- which(ol > 0)
-        new_count <- length(i)
-        if(binarize) {
-          x <- rep(1, new_count)
-        } else {
-          x <- ol[i]
-        }
-        i <- i - 1L
-        list(fragment_name = frag_name,
-             x = x,
-             i = i,
-             n_vals = new_count)
-      } else {
-        if(binarize) {
-          ol[ol > 0] <- 1
-        }
-        list(fragment_name = frag_name,
-             counts = ol)
-      }
-    }
-  }
-
   if(n_threads > 1) {
-    fragment_counts <- mclapply(1:length(query_fragments),
-                                count_frags,
+    fragment_counts <- mclapply(query_fragments,
+                                count_gr_overlaps,
+                                target_GRanges,
+                                binarize = binarize,
+                                sparse = sparse,
+                                aggregate = aggregate,
                                 mc.cores = n_threads)
   } else {
-    fragment_counts <- lapply(1:length(query_fragments),
-                              count_frags)
+    fragment_counts <- lapply(query_fragments,
+                              count_gr_overlaps,
+                              target_GRanges,
+                              binarize = binarize,
+                              sparse = sparse,
+                              aggregate = aggregate)
   }
-
+  names(fragment_counts) <- names(query_fragments)
 
   if(aggregate) {
-    for(fc in 1:length(fragment_counts)) {
-      out[fragment_counts[[fc]]$fragment_name] <- fragment_counts[[fc]]$total_count
-    }
+    out <- unlist(fragment_counts)
+    names(out) <- names(fragment_counts)
   } else {
-    frag_names <- unlist(lapply(fragment_counts,
-                                function(fc) fc$fragment_name))
+    frag_names <- names(fragment_counts)
 
     if(sparse) {
       nv <- unlist(lapply(fragment_counts,
@@ -102,8 +121,7 @@ count_frag_ol_ref <-function (query_fragments,
                                         function(fc) fc$x)))
       out@p <- c(0L, as.integer(cumsum(nv)))
     } else {
-      out[1:length(out)] <- unlist(lapply(fragment_counts,
-                                          function(fc) fc$counts))
+      out[1:length(out)] <- unlist(fragment_counts)
     }
 
     colnames(out) <- frag_names
@@ -125,10 +143,10 @@ count_frag_ol_ref <-function (query_fragments,
 filter_gr <- function(query_gr,
                       target_gr,
                       mode = "remove",
-                      ignore.strand = TRUE) {
+                      ignore_strand = TRUE) {
 
   overlapping_fragments <- unique(
-    GenomicRanges::queryHits(
+    S4Vectors::queryHits(
       GenomicRanges::findOverlaps(query_gr,
                                   target_gr,
                                   ignore.strand = ignore_strand)))

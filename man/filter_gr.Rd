@@ -4,16 +4,16 @@
 \alias{filter_gr}
 \title{Filter a GenomicRanges object against another GenomicRanges object}
 \usage{
-filter_gr(query_gr, target_gr, mode = "remove", ignore.strand = TRUE)
+filter_gr(query_gr, target_gr, mode = "remove", ignore_strand = TRUE)
 }
 \arguments{
 \item{target_gr}{The GenomicRanges object to use for filtering.}
 
 \item{mode}{Whether to "remove" or "keep" overlaps. Default is "remove"}
 
-\item{fragment_list}{The list object containing GenomicRanges objects}
-
 \item{ignore_strand}{Logical, whether or not to ignore the strand of regions in the comparison}
+
+\item{fragment_list}{The list object containing GenomicRanges objects}
 }
 \value{
 A filtered GenomicRanges object.
