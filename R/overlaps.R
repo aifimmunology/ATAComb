@@ -107,7 +107,12 @@ count_frag_ol_ref <-function (query_fragments,
                                      })
 
       if (aggregate) {
-        fragment_counts <- do.call("+",fragment_counts_list)
+        fragment_counts <- fragment_counts_list[[1]]
+        for(i in 2:length(fragment_counts_list)) {
+          for(j in 1:length(fragment_counts)){
+            fragment_counts[[j]] <- fragment_counts[[j]] + fragment_counts_list[[i]][[j]]
+          }
+        }
       } else if(sparse) {
         # Join lists
         fragment_counts <- fragment_counts_list[[1]]
