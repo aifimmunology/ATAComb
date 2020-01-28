@@ -69,7 +69,7 @@ stm("Starting scATAC-seq preprocessing")
 
 #### Argument parsing
 ```{r Parse arguments}
-if(is.null(params$in_h5)) {
+if(is.null(params$in_fra)) {
   in_fra <- system.file("testdata/outs/fragments.tsv.gz", package = "ATAComb")
   in_sin <- system.file("testdata/outs/singlecell.csv", package = "ATAComb")
   in_sum <- system.file("testdata/outs/summary.csv", package = "ATAComb")
