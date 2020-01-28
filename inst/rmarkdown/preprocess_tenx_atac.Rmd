@@ -103,6 +103,7 @@ if(Sys.info()[["sysname"]] == "Windows") {
 } else {
   n_threads <- min(n_threads,
                    parallel::detectCores())
+  max_dim_per_thread <- 1e5
 }
 
 stm(paste0("IN  fragments.tsv.gz : ", in_fra))
@@ -268,6 +269,7 @@ meta$pbmc_sample_id <- as.character(samplesheet$SampleID[samplesheet$WellID == i
 #### Compute QC Stats
 ```{r}
 meta$n_reads <- unlist(lapply(fragment_gr_list, length))
+stm("Computing FRITSS")
 
 ritss <- count_frag_ol_ref(query_fragments = fragment_gr_list,
                             target_GRanges = tss_2kb_gr,
@@ -278,6 +280,7 @@ ritss <- count_frag_ol_ref(query_fragments = fragment_gr_list,
 
 meta$fritss <- ritss / meta$n_reads
 
+stm("Computing FRIP")
 nontss_peak_gr <- filter_gr(buenro_gr,
                             tss_2kb_gr)
 
@@ -290,6 +293,7 @@ rip <- count_frag_ol_ref(query_fragments = fragment_gr_list,
 
 meta$frip <- rip / meta$n_reads
 
+stm("Computing FRAlt")
 reduced_alt <- reduce(alt_idx_gr)
 ralt <- count_frag_ol_ref(query_fragments = fragment_gr_list,
                           target_GRanges = reduced_alt,

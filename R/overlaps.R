@@ -9,10 +9,10 @@
 #' @return If aggregate = TRUE, a vector of counts. If aggregate is FALSE and sparse is FALSE, a vector of values. If sparse is true, a list to use to build a dgCMatrix object.
 #' @export
 count_gr_overlaps <- function(fragments,
-                        target_GRanges,
-                        binarize,
-                        aggregate,
-                        sparse) {
+                              target_GRanges,
+                              binarize,
+                              aggregate,
+                              sparse) {
 
   if(aggregate) {
     ol <- GenomicRanges::findOverlaps(target_GRanges,
@@ -27,7 +27,7 @@ count_gr_overlaps <- function(fragments,
 
   } else {
     ol <- GenomicRanges::countOverlaps(target_GRanges,
-                                      fragments)
+                                       fragments)
     if (sparse) {
       i <- which(ol > 0)
       new_count <- length(i)
@@ -58,6 +58,7 @@ count_gr_overlaps <- function(fragments,
 #' @param sparse A logical object indicating whether the results should be a sparse matrix (TRUE) or a full matrix (FALSE). Default is TRUE.
 #' @param aggregate A logical object indicating whether the results should be aggregated to a vector with the sum of counts for each query to all target regions. Default is FALSE.
 #' @param n_threads A numeric object specifying the number of threads to use. Default is 1.
+#' @param max_targets_per_thread A numeric object specifying the number of targets to use per thread to prevent runaway RAM usage. Default is 1e5.
 #'
 #' @return If aggregate = TRUE, a vector of counts. If aggregate is FALSE and sparse is FALSE, a matrix object. If sparse is true, as dgCMatrix object.
 #' @export
@@ -66,7 +67,8 @@ count_frag_ol_ref <-function (query_fragments,
                               binarize = TRUE,
                               sparse = FALSE,
                               aggregate = FALSE,
-                              n_threads = 1) {
+                              n_threads = 1,
+                              max_targets_per_thread = 1e5) {
 
   if(class(query_fragments) != "list") {
     query_fragments <- list(query_fragments = query_fragments)
@@ -78,7 +80,6 @@ count_frag_ol_ref <-function (query_fragments,
                                 dims = c(length(target_GRanges),
                                          length(query_fragments)))
     out <- as(out, "dgCMatrix")
-    rownames(out) <- names(target_GRanges)
 
   } else if(!aggregate) {
     out <- matrix(nrow = length(target_GRanges), ncol = length(query_fragments))
@@ -86,13 +87,53 @@ count_frag_ol_ref <-function (query_fragments,
   }
 
   if(n_threads > 1) {
-    fragment_counts <- mclapply(query_fragments,
-                                count_gr_overlaps,
-                                target_GRanges,
-                                binarize = binarize,
-                                sparse = sparse,
-                                aggregate = aggregate,
-                                mc.cores = n_threads)
+    if(length(target_GRanges) > max_targets_per_thread) {
+      n_groups <- ceiling(length(target_GRanges) / max_targets_per_thread)
+      groups <- rep(1:n_groups, each = max_targets_per_thread)[1:length(target_GRanges)]
+
+      split_targets <- split(target_GRanges, groups)
+
+      fragment_counts_list <- lapply(split_targets,
+                                     function(x) {
+                                       mclapply(query_fragments,
+                                                count_gr_overlaps,
+                                                x,
+                                                binarize = binarize,
+                                                sparse = sparse,
+                                                aggregate = aggregate,
+                                                mc.cores = n_threads)
+                                     })
+
+      if (aggregate) {
+        fragment_counts <- do.call("+",fragment_counts_list)
+      } else if(sparse) {
+        # Join lists
+        fragment_counts <- fragment_counts_list[[1]]
+        for(i in 2:length(fragment_counts_list)) {
+          for(j in 1:length(fragment_counts)){
+            fragment_counts[[j]]$x <- c(fragment_counts[[j]]$x, fragment_counts_list[[i]][[j]]$x)
+            fragment_counts[[j]]$i <- c(fragment_counts[[j]]$i, fragment_counts_list[[i]][[j]]$i)
+            fragment_counts[[j]]$n_vals <- fragment_counts[[j]]$n_vals + fragment_counts_list[[i]][[j]]$n_vals
+          }
+        }
+      } else {
+        fragment_counts <- fragment_counts_list[[1]]
+        for(i in 2:length(fragment_counts_list)) {
+          for(j in 1:length(fragment_counts)){
+            fragment_counts[[j]] <- c(fragment_counts[[j]], fragment_counts_list[[i]][[j]])
+          }
+        }
+      }
+    } else {
+      fragment_counts <- mclapply(query_fragments,
+                                  count_gr_overlaps,
+                                  target_GRanges,
+                                  binarize = binarize,
+                                  sparse = sparse,
+                                  aggregate = aggregate,
+                                  mc.cores = n_threads)
+    }
+
   } else {
     fragment_counts <- lapply(query_fragments,
                               count_gr_overlaps,

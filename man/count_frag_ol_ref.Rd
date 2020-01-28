@@ -5,7 +5,8 @@
 \title{Count overlaps between each GRanges object in a list and a single target GRanges object (reference).}
 \usage{
 count_frag_ol_ref(query_fragments, target_GRanges, binarize = TRUE,
-  sparse = FALSE, aggregate = FALSE, n_threads = 1)
+  sparse = FALSE, aggregate = FALSE, n_threads = 1,
+  max_targets_per_thread = 1e+05)
 }
 \arguments{
 \item{query_fragments}{A GenomicRanges object or a list of GenomicRanges objects to use as a query}
@@ -19,6 +20,8 @@ count_frag_ol_ref(query_fragments, target_GRanges, binarize = TRUE,
 \item{aggregate}{A logical object indicating whether the results should be aggregated to a vector with the sum of counts for each query to all target regions. Default is FALSE.}
 
 \item{n_threads}{A numeric object specifying the number of threads to use. Default is 1.}
+
+\item{max_targets_per_thread}{A numeric object specifying the number of targets to use per thread to prevent runaway RAM usage. Default is 1e5.}
 }
 \value{
 If aggregate = TRUE, a vector of counts. If aggregate is FALSE and sparse is FALSE, a matrix object. If sparse is true, as dgCMatrix object.
