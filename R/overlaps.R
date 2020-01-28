@@ -52,6 +52,8 @@ count_gr_overlaps <- function(fragments,
 
 #' Count overlaps between each GRanges object in a list and a single target GRanges object (reference).
 #'
+#' Note: if parallelism is split by max_targets_per_thread, the results when aggregate = TRUE may vary slightly from non-split results due to double-counting at the boundaries between split groups.
+#'
 #' @param query_fragments A GenomicRanges object or a list of GenomicRanges objects to use as a query
 #' @param target_GRanges A single GenomicRanges object to use as a set of target regions
 #' @param binarize A logical object indicating whether or not to binarize overlaps (count any number of overlaps between query and a given target region as 1). Default is TRUE.
@@ -112,7 +114,7 @@ count_frag_ol_ref <-function (query_fragments,
         for(i in 2:length(fragment_counts_list)) {
           for(j in 1:length(fragment_counts)){
             fragment_counts[[j]]$x <- c(fragment_counts[[j]]$x, fragment_counts_list[[i]][[j]]$x)
-            fragment_counts[[j]]$i <- c(fragment_counts[[j]]$i, fragment_counts_list[[i]][[j]]$i)
+            fragment_counts[[j]]$i <- c(fragment_counts[[j]]$i, fragment_counts_list[[i]][[j]]$i + max_targets_per_thread * (i - 1))
             fragment_counts[[j]]$n_vals <- fragment_counts[[j]]$n_vals + fragment_counts_list[[i]][[j]]$n_vals
           }
         }
@@ -155,8 +157,8 @@ count_frag_ol_ref <-function (query_fragments,
                           function(fc) fc$n_vals ))
 
       len_x <- sum(nv)
-      out@i <- unlist(lapply(fragment_counts,
-                             function(fc) fc$i))
+      out@i <- as.integer(unlist(lapply(fragment_counts,
+                                        function(fc) fc$i)))
       out@x <- as.numeric(unlist(lapply(fragment_counts,
                                         function(fc) fc$x)))
       out@p <- c(0L, as.integer(cumsum(nv)))
