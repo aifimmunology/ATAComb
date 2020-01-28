@@ -26,7 +26,7 @@ params:
 - [Session Preparation](#session_preparation)
 - [Load Inputs](#load_inputs)
 - [Assemble Metadata](#assemble data)
-- [Data Output](#data_output)
+- [Fragment Output](#data_output)
 
 #### [QC Metrics and Plots](#qc_metrics)
 - [Well-Based QC](#well_qc)
@@ -73,8 +73,8 @@ if(is.null(params$in_h5)) {
   in_fra <- system.file("testdata/outs/fragments.tsv.gz", package = "ATAComb")
   in_sin <- system.file("testdata/outs/singlecell.csv", package = "ATAComb")
   in_sum <- system.file("testdata/outs/summary.csv", package = "ATAComb")
-  in_key <- system.file("reference/SampleSheet_fallback.csv", package = "H5weaver")
-  in_well <- "B000-P0C0W0"
+  in_key <- system.file("testdata/test_SampleSheet.csv", package = "ATAComb")
+  in_well <- "B000-AP0C1W1"
   out_dir <- tempdir()
   n_threads <- ceiling(parallel::detectCores()/2)
 } else {
@@ -156,12 +156,62 @@ if(!dir.exists(out_dir)) {
 }
 ```
 
+#### Declare QC Cutoffs
+```{r}
+fralt_cut <- 0.7
+fritss_cut <- 0.2
+frip_cut <- 0.2
+
+stm("Using QC Cutoffs:")
+stm(paste("QC FRAlt  : >",fralt_cut))
+stm(paste("QC FRITSS : >",fritss_cut))
+stm(paste("QC FRIP   : >",frip_cut))
+```
+
+```{r}
+print(c(
+  "Using QC Cutoffs:",
+  paste("QC FRAlt  : >",fralt_cut),
+  paste("QC FRITSS : >",fritss_cut),
+  paste("QC FRIP   : >",frip_cut)
+))
+```
 
 [Return to Contents](#contents)
 
 <a id="load_inputs"></a>
 
 ### Load inputs
+
+#### Load Reference Datasets
+```{r Load references}
+# Altius Index
+alt_idx_file <- system.file("reference/hg38_alt_dhs_index_gr.rds", package = "ATAComb")
+stm(paste("Reading Altius Index from", alt_idx_file))
+alt_idx_gr <- readRDS(alt_idx_file)
+
+# Buenrostro Peak Reference
+buenro_file <- system.file("reference/hg38_GSE123577_filtered_gr.rds", package = "ATAComb")
+stm(paste("Reading Buenrostro Peak Reference from", buenro_file))
+buenro_gr <- readRDS(buenro_file)
+
+# Gene Body Reference
+gene_bodies_file <- system.file("reference/hg38_ensemble93_gene_bodies_gr.rds", package = "ATAComb")
+stm(paste("Reading ENSEMBL Gene Body Reference from", gene_bodies_file))
+gene_bodies_gr <- readRDS(gene_bodies_file)
+
+# TSS Reference
+tss_file <- system.file("reference/hg38_ensemble93_tss_2kb_gr.rds",package = "ATAComb")
+stm(paste("Reading ENSEMBL TSS Reference from", tss_file))
+tss_2kb_gr <- readRDS(tss_file)
+```
+
+#### Load SampleSheet
+```{r Load SampleSheet}
+stm(paste0("Reading SampleSheet from ", in_key))
+
+samplesheet <- read.csv(in_key)
+```
 
 #### Load Fragments.tsv
 ```{r Load Query}
@@ -180,15 +230,120 @@ stm(paste0("Converting fragment positions to GenomicRanges"))
 
 fragment_gr_list <- convert_fragments_gr(fragments = fragment_bed_list,
                                          n_threads = n_threads)
+rm(fragment_bed_list)
 ```
+
+
+[Return to Contents](#contents)
+
+<a id="assemble_data"></a>
+
+### Generate Metadata
+
+#### Generate cell IDs
+```{r Generate IDs}
+stm("Generating Cell IDs")
+
+meta <- data.frame(
+  barcodes = ids::uuid(length(fragment_gr_list),
+                       drop_hyphens = TRUE, 
+                       use_time = TRUE),
+  cell_name = ids::adjective_animal(length(fragment_gr_list),
+                                    n_adjectives = 2,
+                                    max_len = 10),
+  original_barcodes = sub("-1","",names(fragment_gr_list)),
+  stringsAsFactors = FALSE)
+
+names(fragment_gr_list) <- meta$barcodes
+```
+
+#### Add Well/Chip/Pool/Sample IDs
+```{r}
+stm("Adding Batch and Sample ID metadata")
+meta$well_id <- in_well
+meta$chip_id <- sub("W[0-9]+$","",meta$well_id)
+meta$batch_id <- sub("-.+","",meta$chip_id)
+meta$pbmc_sample_id <- as.character(samplesheet$SampleID[samplesheet$WellID == in_well])
+```
+
+#### Compute QC Stats
+```{r}
+meta$n_reads <- unlist(lapply(fragment_gr_list, length))
+
+ritss <- count_frag_ol_ref(query_fragments = fragment_gr_list,
+                            target_GRanges = tss_2kb_gr,
+                            binarize = TRUE,
+                            sparse = FALSE,
+                            aggregate = TRUE,
+                            n_threads = n_threads)
+
+meta$fritss <- ritss / meta$n_reads
+
+nontss_peak_gr <- filter_gr(buenro_gr,
+                            tss_2kb_gr)
+
+rip <- count_frag_ol_ref(query_fragments = fragment_gr_list,
+                         target_GRanges = nontss_peak_gr,
+                         binarize = TRUE,
+                         sparse = FALSE,
+                         aggregate = TRUE,
+                         n_threads = n_threads)
+
+meta$frip <- rip / meta$n_reads
+
+reduced_alt <- reduce(alt_idx_gr)
+ralt <- count_frag_ol_ref(query_fragments = fragment_gr_list,
+                          target_GRanges = reduced_alt,
+                          binarize = TRUE,
+                          sparse = FALSE,
+                          aggregate = TRUE,
+                          n_threads = n_threads)
+
+meta$fralt <- ralt / meta$n_reads
+```
+
+
+#### Filter based on cutoffs
+```{r}
+stm("Filtering barcodes based on QC Cutoffs")
+filtered_meta <- meta
+filtered_meta <- filtered_meta[filtered_meta$fralt  > fralt_cut ,]
+filtered_meta <- filtered_meta[filtered_meta$fritss > fritss_cut,]
+filtered_meta <- filtered_meta[filtered_meta$frip   > frip_cut  ,]
+
+fragment_gr_list <- fragment_gr_list[filtered_meta$barcodes]
+```
+
+#### Output filtered fragments.tsv.gz
+```{r}
+stm("Building filtered_fragments.tsv.gz")
+filtered_bed_list <- convert_fragments_bed(fragment_gr_list,
+                                           n_threads = n_threads)
+n_fragments <- unlist(lapply(filtered_bed_list, nrow))
+
+filtered_bed <- do.call("rbind",filtered_bed_list)
+filtered_bed$barcode <- rep(names(filtered_bed_list), n_fragments)
+rm(filtered_bed_list)
+
+out_frag_file <- file.path(out_dir, paste0(in_well, "_filtered_fragments.tsv.gz"))
+stm(paste0("Writing filtered fragments to: ", out_frag_file))
+fwrite(filtered_bed,
+       file = out_frag_file)
+
+rm(filtered_bed)
+```
+
+[Return to Contents](#contents)
+
+<a id="mats"></a>
+
+## Compute Feature Matrices
+
+<a id="mats_alt"></a>
 
 #### Compute overlaps with Altius index
 ```{r Altius overlaps}
-stm("Reading Altius Index from ATAComb")
-
-alt_idx_gr <- readRDS(system.file("reference/hg38_alt_dhs_index_gr.rds", package = "ATAComb"))
-
-stm("Computing overlaps with Altius Index")
+stm("Computing overlaps with Altius Index Features")
 
 alt_ol_mat <- count_frag_ol_ref(query_fragments = fragment_gr_list,
                                 target_GRanges = alt_idx_gr,
@@ -203,11 +358,33 @@ rownames(alt_ol_mat) <- paste(seqnames(alt_idx_gr),
                               sep = "_")
 ```
 
+#### Build Altius list and output .h5 file
+```{r Build Altius h5}
+alt_list <- list(matrix_dgCMatrix = alt_ol_mat)
+rm(alt_ol_mat)
+
+alt_list <- h5_list_convert_from_dgCMatrix(alt_list,
+                                           target = "matrix")
+alt_list$matrix$observations <- as.list(filtered_meta)
+```
+
+Write Altius Index .h5 file
+```{r Write Altius h5}
+alt_out_file <- file.path(out_dir, paste0(in_well, "_altius.h5"))
+stm(paste("Writing Altius Index h5 file to", alt_out_file))
+write_h5_list(alt_list,
+              alt_out_file)
+
+rm(alt_list)
+```
+
+[Return to Contents](#contents)
+
+<a id="mats_buenro"></a>
+
 #### Compute overlaps with Buenrostro reference
 ```{r Buenrostro overlaps}
-stm("Computing overlaps with Buenrostro reference")
-
-buenro_gr <- readRDS(system.file("reference/hg38_GSE123577_filtered_gr.rds", package = "ATAComb"))
+stm("Computing overlaps with Buenrostro reference Features")
 
 buenro_ol_mat <- count_frag_ol_ref(query_fragments = fragment_gr_list,
                                    target_GRanges = buenro_gr,
@@ -223,80 +400,137 @@ rownames(buenro_ol_mat) <- paste(seqnames(buenro_gr),
 
 ```
 
-#### Gene body and TSS overlaps
-```{r Gene Overlaps}
-stm("Computing overlaps with ENSEMBL reference")
-gene_bodies_gr <- readRDS(system.file("reference/hg38_ensemble93_gene_bodies_gr.rds",
-                                      package = "ATAComb"))
+#### Build Buenrostro list and output .h5 file
+```{r Build Buenrostro h5}
+buenro_list <- list(matrix_dgCMatrix = buenro_ol_mat)
+rm(buenro_ol_mat)
 
-gene_body_ol_mat <- buenro_ol_mat <- count_frag_ol_ref(query_fragments = fragment_gr_list,
+buenro_list <- h5_list_convert_from_dgCMatrix(buenro_list,
+                                           target = "matrix")
+buenro_list$matrix$observations <- as.list(filtered_meta)
+```
+
+Write Buenrostro .h5 file
+```{r Write Buenrostro h5}
+buenro_out_file <- file.path(out_dir, paste0(in_well, "_buenrostro_peak.h5"))
+stm(paste("Writing Buenrostro Peak h5 file to", buenro_out_file))
+write_h5_list(buenro_list,
+              buenro_out_file)
+
+rm(buenro_list)
+```
+
+[Return to Contents](#contents)
+
+<a id="mats_gene_body"></a>
+
+#### Gene body overlaps
+```{r Gene Overlaps}
+stm("Computing overlaps with ENSEMBL reference Features")
+
+gene_body_ol_mat <- count_frag_ol_ref(query_fragments = fragment_gr_list,
                                                        target_GRanges = gene_bodies_gr,
                                                        binarize = FALSE,
                                                        sparse = TRUE,
                                                        aggregate = FALSE,
                                                        n_threads = n_threads)
 rownames(gene_body_ol_mat) <- gene_bodies_gr$gene_id
+```
 
-tss_2kb_gr <- readRDS(system.file("reference/hg38_ensemble93_tss_2kb_gr.rds",
-                                   package = "ATAComb"))
+#### Build Gene Body list and output .h5 file
+```{r Build Gene Body h5}
+gene_body_list <- list(matrix_dgCMatrix = gene_body_ol_mat)
+rm(gene_body_ol_mat)
 
-tss_2kb_ol_mat <- buenro_ol_mat <- count_frag_ol_ref(query_fragments = fragment_gr_list,
+gene_body_list <- h5_list_convert_from_dgCMatrix(gene_body_list,
+                                           target = "matrix")
+gene_body_list$matrix$observations <- as.list(filtered_meta)
+```
+
+Write Gene Body .h5 file
+```{r Write Gene Body h5}
+gene_body_out_file <- file.path(out_dir, paste0(in_well, "_gene_body.h5"))
+stm(paste("Writing Gene Body h5 file to", gene_body_out_file))
+write_h5_list(gene_body_list,
+              gene_body_out_file)
+
+rm(gene_body_list)
+```
+
+[Return to Contents](#contents)
+
+<a id="mats_tss"></a>
+
+#### TSS Overlaps
+```{r TSS Overlaps}
+tss_2kb_ol_mat <- count_frag_ol_ref(query_fragments = fragment_gr_list,
                                                        target_GRanges = tss_2kb_gr,
                                                        binarize = FALSE,
                                                        sparse = TRUE,
                                                        aggregate = FALSE,
                                                        n_threads = n_threads)
 rownames(tss_2kb_ol_mat) <- tss_2kb_gr$gene_id
-
-
 ```
 
+#### Build TSS list and output .h5 file
+```{r Build TSS h5}
+tss_2kb_list <- list(matrix_dgCMatrix = tss_2kb_ol_mat)
+rm(tss_2kb_ol_mat)
 
-```{r}
-n_reads <- unlist(lapply(fragment_gr_list, length))
-
-ritss <- count_frag_ol_ref(query_fragments = fragment_gr_list,
-                            target_GRanges = tss_2kb_gr,
-                            binarize = TRUE,
-                            sparse = FALSE,
-                            aggregate = TRUE,
-                            n_threads = n_threads)
-
-fritss <- ritss / n_reads
-
-nontss_peak_gr <- filter_gr(buenro_gr,
-                            tss_2kb_gr)
-
-rip <- count_frag_ol_ref(query_fragments = fragment_gr_list,
-                         target_GRanges = nontss_peak_gr,
-                         binarize = TRUE,
-                         sparse = FALSE,
-                         aggregate = TRUE,
-                         n_threads = n_threads)
-
-frip <- rip / n_reads
-
-reduced_alt <- reduce(alt_idx_gr)
-ralt <- count_frag_ol_ref(query_fragments = fragment_gr_list,
-                          target_GRanges = reduced_alt,
-                          binarize = TRUE,
-                          sparse = FALSE,
-                          aggregate = TRUE,
-                          n_threads = n_threads)
-
-fralt <- ralt / n_reads
+tss_2kb_list <- h5_list_convert_from_dgCMatrix(tss_2kb_list,
+                                           target = "matrix")
+tss_2kb_list$matrix$observations <- as.list(filtered_meta)
 ```
 
+Write Gene Body .h5 file
+```{r Write TSS h5}
+tss_2kb_out_file <- file.path(out_dir, paste0(in_well, "_tss_2kb.h5"))
+stm(paste("Writing TSS h5 file to", tss_2kb_out_file))
+write_h5_list(tss_2kb_list,
+              tss_2kb_out_file)
 
-#### Compute Window-based matrix
-```{r Window Matrices}
+rm(tss_2kb_list)
+```
+
+[Return to Contents](#contents)
+
+<a id="mats_5kb"></a>
+
+#### Compute 5kb window matrix
+```{r 5kb Window Matrices}
 stm("Converting fragment positions to windows")
 
 window_5k_mat <- convert_fragments_windows(fragments = fragment_bed_list,
                                            window_size = 5e3,
                                            genome = "hg38",
                                            n_threads = n_threads)
+```
 
+#### Build TSS list and output .h5 file
+```{r Build TSS h5}
+window_5k_list <- list(matrix_dgCMatrix = window_5k_ol_mat)
+rm(window_5k_ol_mat)
+
+window_5k_list <- h5_list_convert_from_dgCMatrix(window_5k_list,
+                                           target = "matrix")
+window_5k_list$matrix$observations <- as.list(filtered_meta)
+```
+
+Write Gene Body .h5 file
+```{r Write TSS h5}
+window_5k_out_file <- file.path(out_dir, paste0(in_well, "_window_5kb.h5"))
+stm(paste("Writing 5kb Window h5 file to", window_5k_out_file))
+write_h5_list(window_5k_list,
+              window_5k_out_file)
+
+rm(window_5k_list)
+```
+
+[Return to Contents](#contents)
+
+<a id="mats_20kb"></a>
+
+```{r 20kb Window Matrices}
 window_20k_mat <- convert_fragments_windows(fragments = fragment_bed_list,
                                             window_size = 2e4,
                                             genome = "hg38",
@@ -304,297 +538,124 @@ window_20k_mat <- convert_fragments_windows(fragments = fragment_bed_list,
 
 ```
 
+#### Build TSS list and output .h5 file
+```{r Build TSS h5}
+window_20k_list <- list(matrix_dgCMatrix = window_20k_ol_mat)
+rm(window_20k_ol_mat)
+
+window_20k_list <- h5_list_convert_from_dgCMatrix(window_20k_list,
+                                           target = "matrix")
+window_20k_list$matrix$observations <- as.list(filtered_meta)
+```
+
+Write Gene Body .h5 file
+```{r Write TSS h5}
+window_20k_out_file <- file.path(out_dir, paste0(in_well, "_window_20kb.h5"))
+stm(paste("Writing 20kb Window h5 file to", window_20k_out_file))
+write_h5_list(window_20k_list,
+              window_20k_out_file)
+
+rm(window_20k_list)
+```
+
+[Return to Contents](#contents)
+
+<a id="qc_plots"></a>
+
+#### Plot QC Stats
 ```{r}
-window_cov_5k <- colSums(window_5k_mat > 0) / nrow(window_5k_mat)
-window_cov_20k <- colSums(window_20k_mat > 0) / nrow(window_20k_mat)
+n_reads_hist <- qc_hist_plot(meta,
+                             column = "n_reads",
+                             name_x = "N Reads per Cell",
+                             log_x = TRUE,
+                             fill = "dodgerblue",
+                             target = 2500)
+fralt_hist <- qc_frac_hist_plot(meta,
+                                column = "fralt",
+                                name_x = "Frac Reads in Altius Index (FRAlt)",
+                                fill = "darkgreen",
+                                target = fralt_cut)
+fritss_hist <- qc_frac_hist_plot(meta,
+                                 column = "fritss",
+                                 name_x = "Frac Reads in TSS (FRITSS)",
+                                 fill = "orangered",
+                                 target = fritss_cut)
+frip_hist <- qc_frac_hist_plot(meta,
+                               column = "frip",
+                               name_x = "Frac Reads in Peaks (FRIP)",
+                               fill = "mediumorchid3",
+                               target = frip_cut)
+
+
+plot_list <- list(n_reads_hist,
+                  fralt_hist,
+                  fritss_hist,
+                  frip_hist)
+
+cowplot::plot_grid(plotlist = plot_list,
+                   nrow = 4, ncol = 1)
 ```
 
-
-#### Assemble h5 list
-```{r Assemble h5 list}
-h5_list <- list(alt_index_dgCMatrix = alt_ol_mat,
-                buenro_peaks_dgCMatrix = buenro_ol_mat,
-                windows_5k_dgCMatrix = window_5k_mat,
-                windows_20k_dgCMatrix = window_20k_mat)
-
-h5_list <- h5_list_convert_from_dgCMatrix(h5_list, target = "alt_index")
-h5_list <- h5_list_convert_from_dgCMatrix(h5_list, target = "buenro_peaks")
-h5_list <- h5_list_convert_from_dgCMatrix(h5_list, target = "windows_5k")
-h5_list <- h5_list_convert_from_dgCMatrix(h5_list, target = "windows_20k")
-```
-
-#### Add cell ids
-```{r Add cell ids}
-h5_list <- add_cell_ids(h5_list, 
-                        target = "windows_5k",
-                        add_uuid = TRUE,
-                        replace_barcode = TRUE,
-                        retain_original_barcode = TRUE,
-                        add_name = TRUE)
-
-h5_list$alt_index$barcodes <- h5_list$windows_5k$barcodes
-h5_list$buenro_peaks$barcodes <- h5_list$windows_5k$barcodes
-h5_list$windows_20k$barcodes <- h5_list$windows_5k$barcodes
-```
-
-#### Count TSS overlaps
-
-
-[Return to Contents](#contents)
-
-<a id="assemble_data"></a>
-
-### Assemble data
-
-#### Compute N UMIs and N Genes per cell
-```{r n_umi and n_genes}
-stm("Computing UMI and Gene Counts per Cell")
-
-h5_list <- h5_list_convert_to_dgCMatrix(h5_list, target = "matrix")
-
-h5_list <- set_list_path(h5_list,
-                         "/matrix/observations/n_umis",
-                         unname(colSums(h5_list$matrix_dgCMatrix)))
-
-h5_list <- set_list_path(h5_list,
-                         "/matrix/observations/n_genes",
-                         unname(colSums(h5_list$matrix_dgCMatrix > 0)))
-
-h5_list <- h5_list_convert_from_dgCMatrix(h5_list, target = "matrix")
-```
-
-#### Add cell ids
+#### Pairwise scatters
 ```{r}
-stm("Adding Cell UUIDs and Names")
-
-h5_list <-add_cell_ids(h5_list,
-                       add_uuid = TRUE,
-                       replace_barcode = TRUE,
-                       retain_original_barcode = TRUE,
-                       add_name = TRUE)
+qc_scatter_plot(meta,
+                column_x = "n_reads",
+                name_x = "N Reads per Cell",
+                column_y = "fralt",
+                name_y = "Frac Reads in Altius Index (FRAlt)",
+                log_x = TRUE, log_y = FALSE, frac_y = TRUE,
+                show_targets = FALSE) +
+  geom_vline(aes(xintercept = 2.5e3), linetype = "dashed", size = 0.2) +
+  geom_hline(aes(yintercept = fralt_cut), linetype = "dashed", size = 0.2)
 ```
 
-#### Generate Chip, Pool, and Batch IDs based on well_id
-```{r Chip Pool Batch}
-stm("Adding Batch, Pool, Chip, and Well metadata")
-
-h5_list <- add_well_metadata(h5_list,
-                             well_id = in_well)
-```
-
-#### Add chrM gene counts
-```{r chrM UMIs}
-stm("Adding chrM count metadata")
-
-h5_list <- h5_list_add_mito_umis(h5_list)
-```
-
-#### Add Well Metrics
-```{r Add Well Metrics}
-well_metrics <- read_tenx_metrics(in_sum)
-
-well_metrics <- as.list(well_metrics)
-
-h5_list <- set_list_path(h5_list,
-                         "/well",
-                         well_metrics)
-
-h5_list <- set_list_path(h5_list,
-                         "/well/well_id",
-                         in_well)
-```
-
-
-[Return to Contents](#contents)
-
-<a id="data_output"></a>
-
-### Write Output
-
-#### Write HDF5 files
-```{r Write split files}
-stm(paste0("Writing HDF5 to ", out_h5))
-write_h5_list(h5_list,
-              h5_file = out_h5,
-              overwrite = TRUE)
-h5closeAll()
-```
-
-[Return to Contents](#contents)
-
-<a id="qc_metrics"></a>
-
-## QC Tables and Plots
-
-Extract metadata for plotting
-```{r Assemble Metadata}
-stm("Generating tables and plots for report")
-meta <- h5_list_cell_metadata(h5_list)
-
-qc_list <- list(report_type = "add_tenx_rna_metadata",
-                report_datetime = as.character(start_time),
-                report_uuid = ids::uuid(use_time = TRUE),
-                package = "H5weaver",
-                package_version = sessionInfo()$otherPkgs$H5weaver$Version,
-                well_id = in_well)
-```
-
-[Return to Contents](#contents)
-
-<a id="well_qc"></a>
-
-### Well QC
-
-<a id="well_metrics"></a>
-
-#### 10x Genomics Mapping Metrics
-```{r Well Metrics}
-qc_well_metrics <- data.frame(tenx_metric = names(well_metrics),
-                              value = as.vector(unlist(well_metrics)),
-                              stringsAsFactors = FALSE)
-
-qc_well_metrics$value[qc_well_metrics$tenx_metric == "number_of_reads"] <- as.numeric(qc_well_metrics$value[qc_well_metrics$tenx_metric == "number_of_reads"] / 1e6)
-qc_well_metrics$tenx_metric[qc_well_metrics$tenx_metric == "number_of_reads"] <- "millions_of_reads"
-
-qc_list$well_metrics <- split(qc_well_metrics$value, 1:nrow(qc_well_metrics))
-names(qc_list$well_metrics) <- qc_well_metrics$tenx_metric
-
-qc_table(qc_well_metrics)
-```
-
-[Return to Contents](#contents)
-
-<a id="rug_stats"></a>
-
-#### Well Read/UMI/Gene Summary Stats
-```{r Read UMI Gene Stats}
-overview_stats <- data.frame(statistic = c("N Mapped Reads",
-                                           "N UMIs",
-                                           "N Mito. UMIs",
-                                           "N Genes",
-                                           "Reads per UMI",
-                                           "UMIs per Gene",
-                                           "Reads per Gene"),
-                             q_25 = c(quantile(meta$n_reads, 0.25),
-                                      quantile(meta$n_umis,  0.25),
-                                      quantile(meta$n_mito_umis, 0.25),
-                                      quantile(meta$n_genes, 0.25),
-                                      quantile(meta$n_reads/meta$n_umis, 0.25, na.rm = TRUE),
-                                      quantile(meta$n_umis/meta$n_genes, 0.25, na.rm = TRUE),
-                                      quantile(meta$n_reads/meta$n_genes, 0.25, na.rm = TRUE)),
-                             median = c(quantile(meta$n_reads, 0.5),
-                                        quantile(meta$n_umis,  0.50),
-                                        quantile(meta$n_mito_umis, 0.50),
-                                        quantile(meta$n_genes, 0.50),
-                                        quantile(meta$n_reads/meta$n_umis, 0.50, na.rm = TRUE),
-                                        quantile(meta$n_umis/meta$n_genes, 0.50, na.rm = TRUE),
-                                        quantile(meta$n_reads/meta$n_genes, 0.50, na.rm = TRUE)),
-                             q_75 = c(quantile(meta$n_reads, 0.75),
-                                      quantile(meta$n_umis,  0.75),
-                                      quantile(meta$n_mito_umis, 0.25),
-                                      quantile(meta$n_genes, 0.75),
-                                      quantile(meta$n_reads/meta$n_umis, 0.75, na.rm = TRUE),
-                                      quantile(meta$n_umis/meta$n_genes, 0.75, na.rm = TRUE),
-                                      quantile(meta$n_reads/meta$n_genes, 0.75, na.rm = TRUE)))
-
-overview_stats$q_25 <- round(overview_stats$q_25, 2)
-overview_stats$median <- round(overview_stats$median, 2)
-overview_stats$q_75 <- round(overview_stats$q_75, 2)
-
-qc_list$well_count_stats <- lapply(1:nrow(overview_stats),
-                                   function(x) {
-                                     list(q_25 = overview_stats$q_25[x],
-                                          median = overview_stats$median[x],
-                                          q_75 = overview_stats$q_75[x])
-                                   })
-names(qc_list$well_count_stats) <- tolower(gsub("[\\. ]+", "_", overview_stats$statistic))
-
-qc_table(overview_stats)
-```
-
-[Return to Contents](#contents)
-
-<a id="rug_hists"></a>
-
-### Well Read/UMI/Gene Histograms
-```{r QC histograms}
-reads_plot <- qc_hist_plot(meta,
-                           column = "n_reads",
-                           name_x = "N Reads per Cell",
-                           fill = "dodgerblue",
-                           target = 2e4) +
-  ggtitle("Alignment/Mapping Distributions")
-
-umis_plot <- qc_hist_plot(meta,
-                          column = "n_umis",
-                          name_x = "N UMIs per Cell",
-                          fill = "purple",
-                          target = 8e3)
-
-genes_plot <- qc_hist_plot(meta,
-                           column = "n_genes",
-                           name_x = "N Genes per Cell",
-                           fill = "orangered",
-                           target = 2e3)
-
-histogram_list <- list(reads_plot,
-                       umis_plot,
-                       genes_plot)
-
-suppressWarnings(
-  plot_grid(plotlist = histogram_list,
-            ncol = 1,
-            nrow = 3)
-)
-```
-
-[Return to Contents](#contents)
-
-<a id="rug_scatters"></a>
-
-#### UMIs vs Reads Scatter Plot
-```{r Read UMI Gene Scatter Plots}
-umi_reads_scatter <- qc_scatter_plot(meta,
-                                     column_x = "n_reads",
-                                     name_x = "N Reads per Cell",
-                                     column_y = "n_umis",
-                                     name_y = "N UMIs per Cell",
-                                     color = "darkblue") +
-  ggtitle("UMIs vs Reads")
-
-suppressWarnings(
-  umi_reads_scatter
-)
-```
-
-#### Genes vs UMIs Scatter Plot
 ```{r}
-genes_umis_scatter <- qc_scatter_plot(meta,
-                                      column_x = "n_umis",
-                                      name_x = "N UMIs per Cell",
-                                      column_y = "n_genes",
-                                      name_y = "N Genes per Cell",
-                                      color = "red") +
-  ggtitle("Genes vs UMIs")
-
-suppressWarnings(
-  genes_umis_scatter
-)
+qc_scatter_plot(meta,
+                column_x = "fritss",
+                name_x = "Frac Reads in TSS (FRITSS)",
+                column_y = "frip",
+                name_y = "Frac Reads in Peaks (FRIP)",
+                log_x = FALSE, frac_x = TRUE, log_y = FALSE, frac_y = TRUE,
+                show_targets = FALSE,
+                color = "orange") +
+  geom_vline(aes(xintercept = fritss_cut), linetype = "dashed", size = 0.2) +
+  geom_hline(aes(yintercept = frip_cut), linetype = "dashed", size = 0.2)
 ```
 
-#### Genes vs Reads Scatter Plot
-```{r}
-genes_reads_scatter <- qc_scatter_plot(meta,
-                                       column_x = "n_reads",
-                                       name_x = "N Reads per Cell",
-                                       column_y = "n_genes",
-                                       name_y = "N Genes per Cell",
-                                       color = "darkgreen") +
-  ggtitle("Genes vs Reads")
 
-suppressWarnings(
-  genes_reads_scatter
-)
+
+#### Filtered QC Hists
+```{r}
+n_reads_hist <- qc_hist_plot(filtered_meta,
+                             column = "n_reads",
+                             name_x = "N Reads per Cell",
+                             log_x = TRUE,
+                             fill = "dodgerblue",
+                             target = 2500)
+fralt_hist <- qc_frac_hist_plot(filtered_meta,
+                                column = "fralt",
+                                name_x = "Frac Reads in Altius Index (FRAlt)",
+                                fill = "darkgreen",
+                                target = fralt_cut)
+fritss_hist <- qc_frac_hist_plot(filtered_meta,
+                                 column = "fritss",
+                                 name_x = "Frac Reads in TSS (FRITSS)",
+                                 fill = "orangered",
+                                 target = fritss_cut)
+frip_hist <- qc_frac_hist_plot(filtered_meta,
+                               column = "frip",
+                               name_x = "Frac Reads in Peaks (FRIP)",
+                               fill = "mediumorchid3",
+                               target = frip_cut)
+
+
+plot_list <- list(n_reads_hist,
+                  fralt_hist,
+                  fritss_hist,
+                  frip_hist)
+
+cowplot::plot_grid(plotlist = plot_list,
+                   nrow = 4, ncol = 1)
 ```
 
 [Return to Contents](#contents)
@@ -604,15 +665,7 @@ suppressWarnings(
 ### Write QC JSON
 
 ```{r Save QC JSON}
-stm(paste0("Writing JSON to ", out_json))
-
-qc_list_json <- jsonlite::toJSON(qc_list,
-                                 auto_unbox = TRUE,
-                                 pretty = TRUE)
-
-writeLines(qc_list_json,
-           out_json)
-
+stm("No JSON available at this point.")
 ```
 
 [Return to Contents](#contents)

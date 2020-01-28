@@ -37,8 +37,7 @@ count_gr_overlaps <- function(fragments,
         x <- ol[i]
       }
       i <- i - 1L
-      list(fragment_name = frag_name,
-           x = x,
+      list(x = x,
            i = i,
            n_vals = new_count)
     } else {
