@@ -230,7 +230,6 @@ stm(paste0("Converting fragment positions to GenomicRanges"))
 
 fragment_gr_list <- convert_fragments_gr(fragments = fragment_bed_list,
                                          n_threads = n_threads)
-rm(fragment_bed_list)
 ```
 
 
@@ -507,9 +506,9 @@ window_5k_mat <- convert_fragments_windows(fragments = fragment_bed_list,
 ```
 
 #### Build TSS list and output .h5 file
-```{r Build TSS h5}
-window_5k_list <- list(matrix_dgCMatrix = window_5k_ol_mat)
-rm(window_5k_ol_mat)
+```{r Build 5k Window h5}
+window_5k_list <- list(matrix_dgCMatrix = window_5k_mat)
+rm(window_5k_mat)
 
 window_5k_list <- h5_list_convert_from_dgCMatrix(window_5k_list,
                                            target = "matrix")
@@ -517,7 +516,7 @@ window_5k_list$matrix$observations <- as.list(filtered_meta)
 ```
 
 Write Gene Body .h5 file
-```{r Write TSS h5}
+```{r Write 5k Window h5}
 window_5k_out_file <- file.path(out_dir, paste0(in_well, "_window_5kb.h5"))
 stm(paste("Writing 5kb Window h5 file to", window_5k_out_file))
 write_h5_list(window_5k_list,
@@ -539,9 +538,9 @@ window_20k_mat <- convert_fragments_windows(fragments = fragment_bed_list,
 ```
 
 #### Build TSS list and output .h5 file
-```{r Build TSS h5}
-window_20k_list <- list(matrix_dgCMatrix = window_20k_ol_mat)
-rm(window_20k_ol_mat)
+```{r Build 20k Window h5}
+window_20k_list <- list(matrix_dgCMatrix = window_20k_mat)
+rm(window_20k_mat)
 
 window_20k_list <- h5_list_convert_from_dgCMatrix(window_20k_list,
                                            target = "matrix")
@@ -549,7 +548,7 @@ window_20k_list$matrix$observations <- as.list(filtered_meta)
 ```
 
 Write Gene Body .h5 file
-```{r Write TSS h5}
+```{r Write 20k Window h5}
 window_20k_out_file <- file.path(out_dir, paste0(in_well, "_window_20kb.h5"))
 stm(paste("Writing 20kb Window h5 file to", window_20k_out_file))
 write_h5_list(window_20k_list,
