@@ -103,7 +103,7 @@ if(Sys.info()[["sysname"]] == "Windows") {
 } else {
   n_threads <- min(n_threads,
                    parallel::detectCores())
-  max_dim_per_thread <- 1e5
+  max_targets_per_thread <- 2.5e5
 }
 
 stm(paste0("IN  fragments.tsv.gz : ", in_fra))
@@ -272,11 +272,12 @@ meta$n_reads <- unlist(lapply(fragment_gr_list, length))
 stm("Computing FRITSS")
 
 ritss <- count_frag_ol_ref(query_fragments = fragment_gr_list,
-                            target_GRanges = tss_2kb_gr,
-                            binarize = TRUE,
-                            sparse = FALSE,
-                            aggregate = TRUE,
-                            n_threads = n_threads)
+                           target_GRanges = tss_2kb_gr,
+                           binarize = TRUE,
+                           sparse = FALSE,
+                           aggregate = TRUE,
+                           n_threads = n_threads,
+                           max_targets_per_thread = max_targets_per_thread)
 
 meta$fritss <- ritss / meta$n_reads
 
@@ -289,7 +290,8 @@ rip <- count_frag_ol_ref(query_fragments = fragment_gr_list,
                          binarize = TRUE,
                          sparse = FALSE,
                          aggregate = TRUE,
-                         n_threads = n_threads)
+                         n_threads = n_threads,
+                         max_targets_per_thread = max_targets_per_thread)
 
 meta$frip <- rip / meta$n_reads
 
@@ -300,7 +302,8 @@ ralt <- count_frag_ol_ref(query_fragments = fragment_gr_list,
                           binarize = TRUE,
                           sparse = FALSE,
                           aggregate = TRUE,
-                          n_threads = n_threads)
+                          n_threads = n_threads,
+                          max_targets_per_thread = max_targets_per_thread)
 
 meta$fralt <- ralt / meta$n_reads
 ```
@@ -353,7 +356,8 @@ alt_ol_mat <- count_frag_ol_ref(query_fragments = fragment_gr_list,
                                 binarize = FALSE,
                                 sparse = TRUE,
                                 aggregate = FALSE,
-                                n_threads = n_threads)
+                                n_threads = n_threads,
+                                max_targets_per_thread = max_targets_per_thread)
 
 rownames(alt_ol_mat) <- paste(seqnames(alt_idx_gr),
                               start(alt_idx_gr),
@@ -394,7 +398,8 @@ buenro_ol_mat <- count_frag_ol_ref(query_fragments = fragment_gr_list,
                                    binarize = FALSE,
                                    sparse = TRUE,
                                    aggregate = FALSE,
-                                   n_threads = n_threads)
+                                   n_threads = n_threads,
+                                   max_targets_per_thread = max_targets_per_thread)
 
 rownames(buenro_ol_mat) <- paste(seqnames(buenro_gr),
                                  start(buenro_gr),
@@ -432,11 +437,12 @@ rm(buenro_list)
 stm("Computing overlaps with ENSEMBL reference Features")
 
 gene_body_ol_mat <- count_frag_ol_ref(query_fragments = fragment_gr_list,
-                                                       target_GRanges = gene_bodies_gr,
-                                                       binarize = FALSE,
-                                                       sparse = TRUE,
-                                                       aggregate = FALSE,
-                                                       n_threads = n_threads)
+                                      target_GRanges = gene_bodies_gr,
+                                      binarize = FALSE,
+                                      sparse = TRUE,
+                                      aggregate = FALSE,
+                                      n_threads = n_threads,
+                                      max_targets_per_thread = max_targets_per_thread)
 rownames(gene_body_ol_mat) <- gene_bodies_gr$gene_id
 ```
 
@@ -467,11 +473,12 @@ rm(gene_body_list)
 #### TSS Overlaps
 ```{r TSS Overlaps}
 tss_2kb_ol_mat <- count_frag_ol_ref(query_fragments = fragment_gr_list,
-                                                       target_GRanges = tss_2kb_gr,
-                                                       binarize = FALSE,
-                                                       sparse = TRUE,
-                                                       aggregate = FALSE,
-                                                       n_threads = n_threads)
+                                    target_GRanges = tss_2kb_gr,
+                                    binarize = FALSE,
+                                    sparse = TRUE,
+                                    aggregate = FALSE,
+                                    n_threads = n_threads,
+                                    max_targets_per_thread = max_targets_per_thread)
 rownames(tss_2kb_ol_mat) <- tss_2kb_gr$gene_id
 ```
 
