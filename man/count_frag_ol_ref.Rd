@@ -27,5 +27,5 @@ count_frag_ol_ref(query_fragments, target_GRanges, binarize = TRUE,
 If aggregate = TRUE, a vector of counts. If aggregate is FALSE and sparse is FALSE, a matrix object. If sparse is true, as dgCMatrix object.
 }
 \description{
-Count overlaps between each GRanges object in a list and a single target GRanges object (reference).
+Note: if parallelism is split by max_targets_per_thread, the results when aggregate = TRUE may vary slightly from non-split results due to double-counting at the boundaries between split groups.
 }

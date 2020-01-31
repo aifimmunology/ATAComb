@@ -89,9 +89,11 @@ count_frag_ol_ref <-function (query_fragments,
   }
 
   if(n_threads > 1) {
-    if(length(target_GRanges) > max_targets_per_thread) {
-      n_groups <- ceiling(length(target_GRanges) / max_targets_per_thread)
-      groups <- rep(1:n_groups, each = max_targets_per_thread)[1:length(target_GRanges)]
+    n_targets <- length(target_GRanges)
+    if(n_targets > max_targets_per_thread) {
+
+      n_groups <- ceiling(n_targets / max_targets_per_thread)
+      groups <- rep(1:n_groups, each = max_targets_per_thread)[1:n_targets]
 
       split_targets <- split(target_GRanges, groups)
 
@@ -99,7 +101,7 @@ count_frag_ol_ref <-function (query_fragments,
                                      function(x) {
                                        mclapply(query_fragments,
                                                 count_gr_overlaps,
-                                                x,
+                                                target_GRanges = x,
                                                 binarize = binarize,
                                                 sparse = sparse,
                                                 aggregate = aggregate,

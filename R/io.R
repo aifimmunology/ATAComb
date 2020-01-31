@@ -5,6 +5,7 @@
 #' @param min_reads A numeric value indicating the minimum number of reads required to retain a cell barcode. Default is 1000.
 #' @param remove_chrM A logical value indicating whether or not to remove all fragments mapping to the mitochondrial genome. Default is TRUE
 #' @param verbose A logical value indicating whether or not to display messages. Default is TRUE.
+#' @param use_vroom A logical value indicating whether or not to use `vroom` to read fragments. This is more memory efficient. Otherwise, uses data.table. Default is FALSE.
 #'
 #' @return a list of GenomicRanges objects, one per cell barcode
 #' @export
@@ -12,7 +13,8 @@ read_10x_fragments <- function(fragments_tsv,
                                singlecell_csv,
                                min_reads = 1000,
                                remove_chrM = TRUE,
-                               verbose = TRUE) {
+                               verbose = TRUE,
+                               use_vroom = FALSE) {
 
   if(!file.exists(fragments_tsv)) {stop(paste("Can't find fragments.tsv.gz at", fragments_tsv))}
 
@@ -28,10 +30,20 @@ read_10x_fragments <- function(fragments_tsv,
 
 
   if(verbose) {cat("reading fragments.tsv.gz\n")}
-  fragments <- vroom::vroom(fragments_tsv,
-                            delim = "\t",
-                            col_names = c("chr","start","end","barcode","n_reads"),
-                            col_types = c(chr = "c", start = "i", end = "i", barcode = "c", n_reads = "-"))
+  if(use_vroom) {
+    fragments <- vroom::vroom(fragments_tsv,
+                              delim = "\t",
+                              col_names = c("chr","start","end","barcode","n_reads"),
+                              col_types = c(chr = "c", start = "i", end = "i", barcode = "c", n_reads = "-"))
+  } else {
+    fragments <- data.table::fread(fragments_tsv,
+                                   sep = "\t",
+                                   header = FALSE,
+                                   col.names = c("chr","start","end","barcode"),
+                                   colClasses = c("character","integer","integer","character","integer"),
+                                   drop = 5)
+  }
+
 
   if(!is.null(singlecell_csv)) {
     if(verbose) {cat("filtering fragments.tsv.gz\n")}
@@ -279,3 +291,6 @@ merge_gr_list <- function(gr_list) {
 
   GenomicRanges::sort(gr)
 }
+
+
+
