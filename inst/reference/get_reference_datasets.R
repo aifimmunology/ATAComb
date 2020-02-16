@@ -25,6 +25,14 @@ download.file("https://www.encodeproject.org/files/ENCFF503GCK/@@download/ENCFF5
 
 alt_idx_raw <- fread(temp_file)
 
+alt_idx_bed <- alt_idx_raw[,c("seqname","start","end","identifier")]
+fwrite(alt_idx_bed,
+       "inst/reference/hg38_alt_dhs_index.bed.gz",
+       sep = "\t",
+       quote = FALSE,
+       col.names = FALSE,
+       row.names = FALSE)
+
 alt_idx_gr <- GRanges(seqnames = alt_idx_raw$seqname,
                       IRanges(start = alt_idx_raw$start,
                               end = alt_idx_raw$end),
@@ -60,6 +68,22 @@ hg19_gr <- hg19_gr[keep_lo]
 
 saveRDS(hg19_gr, "inst/reference/hg19_GSE123577_filtered_gr.rds")
 saveRDS(hg38_gr, "inst/reference/hg38_GSE123577_filtered_gr.rds")
+
+hg19_bed <- as.data.frame(hg19_gr)[,1:3]
+fwrite(hg19_bed,
+       "inst/reference/hg19_GSE123577_filtered.bed.gz",
+       sep = "\t",
+       quote = FALSE,
+       col.names = FALSE,
+       row.names = FALSE)
+
+hg38_bed <- as.data.frame(hg38_gr)[,1:3]
+fwrite(hg38_bed,
+       "inst/reference/hg38_GSE123577_filtered.bed.gz",
+       sep = "\t",
+       quote = FALSE,
+       col.names = FALSE,
+       row.names = FALSE)
 
 ## TSS regions: ENSEMBL Hg38 v93
 ## Couldn't download directly, so downloaded through browser from:
@@ -99,9 +123,24 @@ gene_gr <- GRanges(seqnames = paste0("chr",gtf$seqname),
 saveRDS(gene_gr,
         "inst/reference/hg38_ensemble93_gene_bodies_gr.rds")
 
+gene_bed <- as.data.frame(gene_gr)[,1:4]
+fwrite(gene_bed,
+       "inst/reference/hg38_ensemble93_gene_bodies.bed.gz",
+       sep = "\t",
+       quote = FALSE,
+       col.names = FALSE,
+       row.names = FALSE)
+
 tss_2kb_gr <- resize(gene_gr,
                      width = 4e3,
                      fix = "start")
 saveRDS(tss_2kb_gr,
         "inst/reference/hg38_ensemble93_tss_2kb_gr.rds")
 
+tss_2kb_bed <- as.data.frame(tss_2kb_gr)[,1:4]
+fwrite(tss_2kb_bed,
+       "inst/reference/hg38_ensemble93_tss_2kb.bed.gz",
+       sep = "\t",
+       quote = FALSE,
+       col.names = FALSE,
+       row.names = FALSE)
