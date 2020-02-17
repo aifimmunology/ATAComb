@@ -39,6 +39,7 @@ atac_tf_idf <- function(atac_matrix,
   tf_idf_counts <- filtered_matrix * idf
 
   tf_idf_counts@x[is.na(tf_idf_counts@x)] <- 0
+  names(tf_idf_counts@x) <- NULL
 
   list(tf_idf = tf_idf_counts,
        idf = idf)
@@ -152,8 +153,8 @@ atac_lsi_cca <- function(atac_lsi_1,
                          atac_lsi_2,
                          seed = 3030) {
 
-  atac_pcs_1 <- t(scale(atac_lsi_1, center = FALSE))
-  atac_pcs_2 <- t(scale(atac_lsi_2, center = FALSE))
+  atac_pcs_1 <- scale(t(atac_lsi_1), center = TRUE)
+  atac_pcs_2 <- scale(t(atac_lsi_2), center = TRUE)
 
   crossprod_mat <- crossprod(atac_pcs_1,
                              atac_pcs_2)
@@ -168,8 +169,10 @@ atac_lsi_cca <- function(atac_lsi_1,
   colnames(SVD_uv) <- paste0("cc_", 1:50)
   rownames(SVD_uv) <- c(colnames(atac_pcs_1),
                         colnames(atac_pcs_2))
-  SVD_uv <- abs(SVD_uv)
+
+  SVD_uv <- apply(SVD_uv, 2, function(x) { x * sign(x[1]) })
 
   list(ccv = SVD_uv,
        d = SVD$d)
 }
+
