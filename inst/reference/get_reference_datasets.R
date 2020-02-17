@@ -64,7 +64,9 @@ n_lo <- elementNROWS(hg38_lo)
 keep_lo <- n_lo == 1
 
 hg38_gr <- unlist(hg38_lo[keep_lo])
+hg38_gr <- sort(hg38_gr)
 hg19_gr <- hg19_gr[keep_lo]
+hg19_gr <- sort(hg19_gr)
 
 saveRDS(hg19_gr, "inst/reference/hg19_GSE123577_filtered_gr.rds")
 saveRDS(hg38_gr, "inst/reference/hg38_GSE123577_filtered_gr.rds")
@@ -120,10 +122,12 @@ gene_gr <- GRanges(seqnames = paste0("chr",gtf$seqname),
                    strand = gtf$strand,
                    gene_id = gtf$gene_id,
                    gene_name = gtf$gene_name)
+gene_gr <- sort(gene_gr)
+
 saveRDS(gene_gr,
         "inst/reference/hg38_ensemble93_gene_bodies_gr.rds")
 
-gene_bed <- as.data.frame(gene_gr)[,1:4]
+gene_bed <- as.data.frame(gene_gr)[,c(1:3, 6)]
 fwrite(gene_bed,
        "inst/reference/hg38_ensemble93_gene_bodies.bed.gz",
        sep = "\t",
@@ -134,10 +138,13 @@ fwrite(gene_bed,
 tss_2kb_gr <- resize(gene_gr,
                      width = 4e3,
                      fix = "start")
+
+tss_2kb_gr <- sort(tss_2kb_gr)
+
 saveRDS(tss_2kb_gr,
         "inst/reference/hg38_ensemble93_tss_2kb_gr.rds")
 
-tss_2kb_bed <- as.data.frame(tss_2kb_gr)[,1:4]
+tss_2kb_bed <- as.data.frame(tss_2kb_gr)[,c(1:3, 6)]
 fwrite(tss_2kb_bed,
        "inst/reference/hg38_ensemble93_tss_2kb.bed.gz",
        sep = "\t",
