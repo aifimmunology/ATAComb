@@ -64,9 +64,9 @@ n_lo <- elementNROWS(hg38_lo)
 keep_lo <- n_lo == 1
 
 hg38_gr <- unlist(hg38_lo[keep_lo])
-hg38_gr <- sort(hg38_gr)
+hg38_gr <- sort(hg38_gr, ignore.strand = TRUE)
 hg19_gr <- hg19_gr[keep_lo]
-hg19_gr <- sort(hg19_gr)
+hg19_gr <- sort(hg19_gr, ignore.strand = TRUE)
 
 saveRDS(hg19_gr, "inst/reference/hg19_GSE123577_filtered_gr.rds")
 saveRDS(hg38_gr, "inst/reference/hg38_GSE123577_filtered_gr.rds")
@@ -122,7 +122,7 @@ gene_gr <- GRanges(seqnames = paste0("chr",gtf$seqname),
                    strand = gtf$strand,
                    gene_id = gtf$gene_id,
                    gene_name = gtf$gene_name)
-gene_gr <- sort(gene_gr)
+gene_gr <- sort(gene_gr, ignore.strand = TRUE)
 
 saveRDS(gene_gr,
         "inst/reference/hg38_ensemble93_gene_bodies_gr.rds")
@@ -139,7 +139,7 @@ tss_2kb_gr <- resize(gene_gr,
                      width = 4e3,
                      fix = "start")
 
-tss_2kb_gr <- sort(tss_2kb_gr)
+tss_2kb_gr <- GenomicRanges::sort(tss_2kb_gr, ignore.strand = TRUE)
 
 saveRDS(tss_2kb_gr,
         "inst/reference/hg38_ensemble93_tss_2kb_gr.rds")
