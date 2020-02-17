@@ -166,8 +166,8 @@ atac_lsi_cca <- function(atac_lsi_1,
 
   SVD_uv <- rbind(SVD$u, SVD$v)
   colnames(SVD_uv) <- paste0("cc_", 1:50)
-  rownames(SVD_uv) <- c(rownames(atac_pcs_1),
-                        rownames(atac_pcs_2))
+  rownames(SVD_uv) <- c(colnames(atac_pcs_1),
+                        colnames(atac_pcs_2))
   SVD_uv <- abs(SVD_uv)
 
   list(ccv = SVD_uv,
