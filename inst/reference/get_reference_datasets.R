@@ -41,24 +41,48 @@ alt_idx_gr <- GRanges(seqnames = alt_idx_raw$seqname,
 saveRDS(alt_idx_gr,
         "inst/reference/hg38_alt_dhs_index_gr.rds")
 
+# Conversion to hg19
+temp_chain <- tempfile(fileext = ".over.chain")
+R.utils::gunzip("inst/reference/hg38ToHg19.over.chain.gz",
+                temp_chain,
+                remove = FALSE)
+
+ch_to_38 <- import.chain(temp_chain)
+
+hg19_alt_idx_lo <- liftOver(alt_idx_gr, ch_to_38)
+n_hg19_lo <- elementNROWS(hg19_alt_idx_lo)
+
+keep_hg19_lo <- n_hg19_lo == 1
+
+hg19_alt_idx <- unlist(hg19_alt_idx_lo[keep_hg19_lo])
+hg19_alt_idx <- sort(hg19_alt_idx, ignore.strand = TRUE)
+
+saveRDS(hg19_alt_idx,
+        "inst/reference/hg19_alt_dhs_index_gr.rds")
+
+hg19_alt_idx_bed <- as.data.frame(hg19_alt_idx)
+hg19_alt_idx_bed <- hg19_alt_idx_bed[,c("seqnames","start","end","identifier")]
+
+fwrite(hg19_alt_idx_bed,
+       "inst/reference/hg19_alt_dh_index.bed.gz",
+       sep = "\t",
+       quote = FALSE,
+       col.names = FALSE,
+       row.names = FALSE)
+
 ## Buenrostro/GSE123577 peak set
-temp_file <- tempfile(fileext = ".bed.gz")
-
-download.file("https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE123577&format=file&file=GSE123577%5Fpbmc%5Fpeaks%2Ebed%2Egz",
-              temp_file)
-
 temp_chain <- tempfile(fileext = ".over.chain")
 R.utils::gunzip("inst/reference/hg19ToHg38.over.chain.gz",
                 temp_chain,
                 remove = FALSE)
 
-ch <- import.chain(temp_chain)
+ch_to_19 <- import.chain(temp_chain)
 
 hg19_peaks <- fread(temp_file)
 names(hg19_peaks) <- c("chr","start","end")
 hg19_gr <- convert_fragments_gr(list(hg19_peaks))[[1]]
 
-hg38_lo <- liftOver(hg19_gr, ch)
+hg38_lo <- liftOver(hg19_gr, ch_to_19)
 n_lo <- elementNROWS(hg38_lo)
 
 keep_lo <- n_lo == 1
@@ -147,6 +171,75 @@ saveRDS(tss_2kb_gr,
 tss_2kb_bed <- as.data.frame(tss_2kb_gr)[,c(1:3, 6)]
 fwrite(tss_2kb_bed,
        "inst/reference/hg38_ensemble93_tss_2kb.bed.gz",
+       sep = "\t",
+       quote = FALSE,
+       col.names = FALSE,
+       row.names = FALSE)
+
+
+## Same process for hg19/GRCh37 build 87
+
+gtf <- fread("C:/Users/lucasg/Downloads/Homo_sapiens.GRCh37.87.gtf.gz", skip = 5)
+names(gtf) <- c("seqname","source","feature","start","end","score","strand","frame","attribute")
+gtf <- gtf[feature == "gene"]
+
+gtf$attribute <- gsub(" ?[a-z|_]+ \"([A-Za-z0-9|_|-]+)\"",
+                      "\\1",
+                      gtf$attribute)
+
+gtf <- separate(gtf,
+                attribute,
+                sep = ";",
+                into = c("gene_id","gene_version","gene_name","gene_source","gene_biotype"))
+
+temp_file <- tempfile(fileext = ".tar.gz")
+download.file("http://cf.10xgenomics.com/samples/cell-exp/1.0.0/pbmc3k/pbmc3k_filtered_gene_bc_matrices.tar.gz",
+              temp_file, mode = "wb")
+
+untar(temp_file, list = TRUE)
+temp_dir <- tempdir()
+
+feat_con <- untar(temp_file,files="filtered_gene_bc_matrices/hg19/genes.tsv", exdir = temp_dir)
+
+tenx_feat <- read.table(file.path(temp_dir, "filtered_gene_bc_matrices/hg19/genes.tsv"))
+names(tenx_feat) <- c("id","name")
+
+keep_gtf <- gtf[gene_id %in% tenx_feat$id]
+
+fwrite(keep_gtf,
+       "inst/reference/hg19_ensemble87_tenx_genes.tsv.gz")
+
+gene_gr <- GRanges(seqnames = paste0("chr",gtf$seqname),
+                   ranges = IRanges(start = gtf$start,
+                                    end = gtf$end),
+                   strand = gtf$strand,
+                   gene_id = gtf$gene_id,
+                   gene_name = gtf$gene_name)
+gene_gr <- sort(gene_gr, ignore.strand = TRUE)
+
+saveRDS(gene_gr,
+        "inst/reference/hg19_ensemble87_gene_bodies_gr.rds")
+
+gene_bed <- as.data.frame(gene_gr)[,c(1:3, 6)]
+fwrite(gene_bed,
+       "inst/reference/hg19_ensemble87_gene_bodies.bed.gz",
+       sep = "\t",
+       quote = FALSE,
+       col.names = FALSE,
+       row.names = FALSE)
+
+tss_2kb_gr <- resize(gene_gr,
+                     width = 4e3,
+                     fix = "start")
+
+tss_2kb_gr <- GenomicRanges::sort(tss_2kb_gr, ignore.strand = TRUE)
+
+saveRDS(tss_2kb_gr,
+        "inst/reference/hg19_ensemble87_tss_2kb_gr.rds")
+
+tss_2kb_bed <- as.data.frame(tss_2kb_gr)[,c(1:3, 6)]
+fwrite(tss_2kb_bed,
+       "inst/reference/hg19_ensemble87_tss_2kb.bed.gz",
        sep = "\t",
        quote = FALSE,
        col.names = FALSE,
