@@ -232,6 +232,8 @@ tss_2kb_gr <- resize(gene_gr,
                      width = 4e3,
                      fix = "start")
 
+start(tss_2kb_gr)[start(tss_2kb_gr) < 1] <- 1
+
 tss_2kb_gr <- GenomicRanges::sort(tss_2kb_gr, ignore.strand = TRUE)
 
 saveRDS(tss_2kb_gr,
