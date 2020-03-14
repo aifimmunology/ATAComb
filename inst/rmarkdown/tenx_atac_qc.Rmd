@@ -70,7 +70,7 @@ stm("Starting scATAC-seq preprocessing")
 #### Argument parsing
 ```{r Parse arguments}
 if(is.null(params$in_pre)) {
-  in_pre <- system.file("testdata/outs/fragments.tsv.gz", package = "ATAComb")
+  in_pre <- system.file("testdata/preprocessed", package = "ATAComb")
   in_sin <- system.file("testdata/outs/singlecell.csv", package = "ATAComb")
   in_sum <- system.file("testdata/outs/summary.csv", package = "ATAComb")
   in_key <- system.file("testdata/test_SampleSheet.csv", package = "ATAComb")
@@ -383,7 +383,7 @@ tss_dt <- tss_dt[original_barcodes %in% filtered_meta$original_barcodes]
 ```
 
 #### Build TSSs list
-```{r Build Altius h5}
+```{r Build TSS h5}
 barcode_counts <- table(tss_dt$original_barcodes)
 region_names <- paste(tss_bed$V1,
                       tss_bed$V2,
@@ -620,6 +620,23 @@ rm(window_100k_list)
 
 #### Barcode QC Stats
 ```{r}
+barcode_conditions <- list("all" = rep(TRUE, nrow(meta)),
+                           "pass_qc" = meta$fralt > fralt_cut & meta$frip > frip_cut & meta$fritss > fritss_cut,
+                           "fail_qc" = meta$fralt < fralt_cut | meta$frip < frip_cut | meta$fritss < fritss_cut,
+                           "fail_fralt" = meta$fralt < fralt_cut,
+                           "fail_frip" = meta$frip < frip_cut,
+                           "fail_fritss" = meta$fritss < fritss_cut,
+                           "fail_all" = meta$fralt < fralt_cut & meta$frip < frip_cut & meta$fritss < fritss_cut)
+
+perc_of <- function(x, d) {
+  round(sum(x) / d * 100, 2)
+}
+
+q_of <- function(x, target, q) {
+  vals <- target[x]
+  round(quantile(vals, probs = q), 4)
+}
+
 barcode_qc_stats <- data.frame(metric = c("Barcodes with > 1k reads",
                                           "Barcodes pass QC",
                                           "Barcodes fail QC",
@@ -627,14 +644,13 @@ barcode_qc_stats <- data.frame(metric = c("Barcodes with > 1k reads",
                                           "Barcodes fail FRIP",
                                           "Barcodes fail FRITSS",
                                           "Barcodes fail all"),
-                               count = c(nrow(meta),
-                                         nrow(filtered_meta),
-                                         nrow(meta) - nrow(filtered_meta),
-                                         sum(meta$fralt < fralt_cut),
-                                         sum(meta$frip < frip_cut),
-                                         sum(meta$fritss < fritss_cut),
-                                         sum(meta$fralt < fralt_cut & meta$frip < frip_cut & meta$fritss < fritss_cut)))
-barcode_qc_stats$percent <- round(barcode_qc_stats$count / barcode_qc_stats$count[1] * 100, 2)
+                               count = sapply(barcode_conditions, sum),
+                               percent = sapply(barcode_conditions, perc_of, nrow(meta)),
+                               median_fragments = sapply(barcode_conditions, q_of, meta$n_fragments, .50),
+                               median_unique = sapply(barcode_conditions, q_of, meta$n_unique, .50),
+                               median_fralt = sapply(barcode_conditions, q_of, meta$fralt, .50),
+                               median_frip = sapply(barcode_conditions, q_of, meta$frip, .50),
+                               median_fritss = sapply(barcode_conditions, q_of, meta$fritss, .50))
 
 qc_table(barcode_qc_stats)
 ```
@@ -664,6 +680,7 @@ fragment_qc_stats$percent <- round(fragment_qc_stats$count / fragment_qc_stats$c
 
 qc_table(fragment_qc_stats)
 ```
+
 
 #### 10x Metrics
 ```{r}
