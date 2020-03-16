@@ -69,8 +69,8 @@ diversity_projection <- function(freq_mat,
   est <- preseqR::preseqR.rSAC.bootstrap(n = freq_mat,
                                          times = times)
 
-  umis_per_step <- floor(step_size * metrics$total_umis / metrics$total_reads)
-  frac_per_step <- umis_per_step / metrics$total_umis
+  umis_per_step <- floor(step_size * total_metrics$total_umis / total_metrics$total_reads)
+  frac_per_step <- umis_per_step / total_metrics$total_umis
 
   max_frac <- max_val / step_size
 
@@ -79,8 +79,8 @@ diversity_projection <- function(freq_mat,
                by = frac_per_step)
 
   proj <- suppressWarnings(
-    data.frame(n_raw_reads = metrics$total_reads * steps,
-               n_mapped_reads = metrics$total_counts * steps,
+    data.frame(n_raw_reads = total_metrics$total_reads * steps,
+               n_mapped_reads = total_metrics$total_counts * steps,
                expected_umis = est$f(steps),
                ci_95_low = est$lb(steps),
                ci_95_high = est$ub(steps))
