@@ -568,7 +568,7 @@ window_20k_list$matrix$observations <- as.list(filtered_meta)
 
 #### Write 20k window .h5 file
 ```{r Write 20k Window h5}
-window_20k_out_file <- paste0(out_prefix, "_window_20k.h5")
+window_20k_out_file <- paste0(out_prefix, "window_20k.h5")
 stm(paste("Writing 20k Window h5 file to", window_20k_out_file))
 write_h5_list(window_20k_list,
               window_20k_out_file)
@@ -617,7 +617,7 @@ window_100k_list$matrix$observations <- as.list(filtered_meta)
 
 #### Write 100k window .h5 file
 ```{r Write 100k Window h5}
-window_100k_out_file <- paste0(out_prefix, "_window_100k.h5")
+window_100k_out_file <- paste0(out_prefix, "window_100k.h5")
 stm(paste("Writing 100k Window h5 file to", window_100k_out_file))
 write_h5_list(window_100k_list,
               window_100k_out_file)
