@@ -211,6 +211,8 @@ stm(paste0("Reading SampleSheet from ", in_key))
 samplesheet <- read.csv(in_key)
 
 in_sample <- as.character(samplesheet$SampleID[samplesheet$WellID == in_well])
+
+out_prefix <- file.path(out_dir, paste0(in_batch, "_", in_sample, "_"))
 ```
 
 
@@ -276,15 +278,14 @@ filtered_meta <- meta[fralt > fralt_cut &
 
 #### Write unfiltered and filtered metadata
 ```{r}
-meta_out <- file.path(out_dir, paste0(in_batch, "_",in_sample,"_all_metadata.csv.gz"))
+meta_out <- paste0(out_prefix, "all_metadata.csv.gz")
 stm(paste("Writing unfiltered metadata to", meta_out))
 fwrite(meta, meta_out)
 
-filtered_meta_out <- file.path(out_dir, paste0(in_batch, "_",in_sample, "_filtered_metadata.csv.gz"))
+filtered_meta_out <- paste0(out_prefix, "filtered_metadata.csv.gz")
 stm(paste("Writing filtered metadata to", filtered_meta_out))
 fwrite(filtered_meta, filtered_meta_out)
 ```
-
 
 [Return to Contents](#contents)
 
@@ -329,7 +330,7 @@ alt_list$matrix$observations <- as.list(filtered_meta)
 
 #### Write Altius Index .h5 file
 ```{r Write Altius h5}
-alt_out_file <- file.path(out_dir, paste0(in_batch, "_",in_sample, "_altius.h5"))
+alt_out_file <- paste0(out_prefix, "altius.h5")
 stm(paste("Writing Altius Index h5 file to", alt_out_file))
 write_h5_list(alt_list,
               alt_out_file)
@@ -375,7 +376,7 @@ peaks_list$matrix$observations <- as.list(filtered_meta)
 
 #### Write Peaks .h5 file
 ```{r Write Peaks h5}
-peaks_out_file <- file.path(out_dir, paste0(in_well, "_peaks.h5"))
+peaks_out_file <- paste0(out_prefix, "peaks.h5")
 stm(paste("Writing peaks h5 file to", peaks_out_file))
 write_h5_list(peaks_list,
               peaks_out_file)
@@ -421,7 +422,7 @@ tss_list$matrix$observations <- as.list(filtered_meta)
 
 #### Write TSSs .h5 file
 ```{r Write TSSs h5}
-tss_out_file <- file.path(out_dir, paste0(in_well, "_tss.h5"))
+tss_out_file <- paste0(out_prefix, "tss.h5")
 stm(paste("Writing tss h5 file to", tss_out_file))
 write_h5_list(tss_list,
               tss_out_file)
@@ -467,7 +468,7 @@ gene_bodies_list$matrix$observations <- as.list(filtered_meta)
 
 Write Gene Bodies .h5 file
 ```{r Write Gene Bodies h5}
-gene_bodies_out_file <- file.path(out_dir, paste0(in_well, "_gene_bodies.h5"))
+gene_bodies_out_file <- paste0(out_prefix, "gene_bodies.h5")
 stm(paste("Writing gene_bodies h5 file to", gene_bodies_out_file))
 write_h5_list(gene_bodies_list,
               gene_bodies_out_file)
@@ -518,7 +519,7 @@ window_5k_list$matrix$observations <- as.list(filtered_meta)
 
 #### Write 5k Window .h5 file
 ```{r Write 5k Window h5}
-window_5k_out_file <- file.path(out_dir, paste0(in_well, "_window_5k.h5"))
+window_5k_out_file <- paste0(out_prefix, "window_5k.h5")
 stm(paste("Writing 5k Window h5 file to", window_5k_out_file))
 write_h5_list(window_5k_list,
               window_5k_out_file)
@@ -567,7 +568,7 @@ window_20k_list$matrix$observations <- as.list(filtered_meta)
 
 #### Write 20k window .h5 file
 ```{r Write 20k Window h5}
-window_20k_out_file <- file.path(out_dir, paste0(in_well, "_window_20k.h5"))
+window_20k_out_file <- paste0(out_prefix, "_window_20k.h5")
 stm(paste("Writing 20k Window h5 file to", window_20k_out_file))
 write_h5_list(window_20k_list,
               window_20k_out_file)
@@ -616,7 +617,7 @@ window_100k_list$matrix$observations <- as.list(filtered_meta)
 
 #### Write 100k window .h5 file
 ```{r Write 100k Window h5}
-window_100k_out_file <- file.path(out_dir, paste0(in_well, "_window_100k.h5"))
+window_100k_out_file <- paste0(out_prefix, "_window_100k.h5")
 stm(paste("Writing 100k Window h5 file to", window_100k_out_file))
 write_h5_list(window_100k_list,
               window_100k_out_file)
@@ -638,7 +639,7 @@ qc_list <- list(report_type = "atac_qc",
                 package_version = sessionInfo()$otherPkgs$ATAComb$Version,
                 well_id = in_well)
 
-out_json <- file.path(out_dir, paste0(in_well, "_atac_qc_metrics.json"))
+out_json <- paste0(out_prefix, "atac_qc_metrics.json")
 ```
 
 [Return to Contents](#contents)
@@ -773,7 +774,7 @@ saturation_projection$M_signal_umis <- round(saturation_projection$signal_umis/1
 
 #### Output projection values
 ```{r}
-out_proj <- file.path(out_dir, paste0(in_batch,"_",in_sample, "_saturation_projection.csv.gz"))
+out_proj <- paste0(out_prefix, "saturation_projection.csv.gz")
 stm(paste0("OUT Sat. Projection   : ", out_proj))
 print(paste0("OUT Sat. Projection    : ", out_proj))
 stm(paste("Writing Saturation Projection to", out_proj))
