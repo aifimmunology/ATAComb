@@ -98,6 +98,7 @@ if(is.null(params$in_pre)) {
 }
 
 in_well <- sub("-[AHR]?P","-AP",in_well)
+in_batch <- sub("-.+","",in_well)
 
 # Check Well ID format
 if(!grepl("^[A-Z][0-9]{3}-AP[0-9]C[0-9]W[0-9]$", in_well)) {
@@ -208,6 +209,8 @@ tss_bed <- fread(tss_file)
 stm(paste0("Reading SampleSheet from ", in_key))
 
 samplesheet <- read.csv(in_key)
+
+in_sample <- as.character(samplesheet$SampleID[samplesheet$WellID == in_well])
 ```
 
 
@@ -256,7 +259,7 @@ stm("Adding Batch and Sample ID metadata")
 meta$well_id <- in_well
 meta$chip_id <- sub("W[0-9]+$","",meta$well_id)
 meta$batch_id <- sub("-.+","",meta$chip_id)
-meta$pbmc_sample_id <- as.character(samplesheet$SampleID[samplesheet$WellID == in_well])
+meta$pbmc_sample_id <- in_sample
 ```
 
 #### Filter metadata based on cutoffs
@@ -273,11 +276,11 @@ filtered_meta <- meta[fralt > fralt_cut &
 
 #### Write unfiltered and filtered metadata
 ```{r}
-meta_out <- file.path(out_dir, paste0(in_well,"_all_metadata.csv.gz"))
+meta_out <- file.path(out_dir, paste0(in_batch, "_",in_sample,"_all_metadata.csv.gz"))
 stm(paste("Writing unfiltered metadata to", meta_out))
 fwrite(meta, meta_out)
 
-filtered_meta_out <- file.path(out_dir, paste0(in_well, "_filtered_metadata.csv.gz"))
+filtered_meta_out <- file.path(out_dir, paste0(in_batch, "_",in_sample, "_filtered_metadata.csv.gz"))
 stm(paste("Writing filtered metadata to", filtered_meta_out))
 fwrite(filtered_meta, filtered_meta_out)
 ```
@@ -326,7 +329,7 @@ alt_list$matrix$observations <- as.list(filtered_meta)
 
 #### Write Altius Index .h5 file
 ```{r Write Altius h5}
-alt_out_file <- file.path(out_dir, paste0(in_well, "_altius.h5"))
+alt_out_file <- file.path(out_dir, paste0(in_batch, "_",in_sample, "_altius.h5"))
 stm(paste("Writing Altius Index h5 file to", alt_out_file))
 write_h5_list(alt_list,
               alt_out_file)
@@ -770,7 +773,7 @@ saturation_projection$M_signal_umis <- round(saturation_projection$signal_umis/1
 
 #### Output projection values
 ```{r}
-out_proj <- file.path(out_dir, paste0(in_well, "_saturation_projection.csv.gz"))
+out_proj <- file.path(out_dir, paste0(in_batch,"_",in_sample, "_saturation_projection.csv.gz"))
 stm(paste0("OUT Sat. Projection   : ", out_proj))
 print(paste0("OUT Sat. Projection    : ", out_proj))
 stm(paste("Writing Saturation Projection to", out_proj))
