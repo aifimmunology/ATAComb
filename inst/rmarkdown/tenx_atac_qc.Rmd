@@ -23,17 +23,28 @@ params:
 
 #### [Data Processing](#data_processing)
 - [Session Preparation](#session_preparation)
-- [Load Inputs](#load_inputs)
-- [Assemble Metadata](#assemble data)
-- [Fragment Output](#data_output)
+- [Load References](#load_refs)
+- [Assemble Metadata](#assemble_meta)
+- [Generate Matrices](#mats)
 
-#### [QC Metrics and Plots](#qc_metrics)
-- [Well-Based QC](#well_qc)
-- [10x Genomics Metrics](#well_metrics)
-- [Read/UMI/Gene Stats](#rug_stats)
-- [Read/UMI/Gene Histograms](#rug_hists)
-- [Read/UMI/Gene Scatters](#rug_scatters)
-- [Write QC JSON](#json_out)
+#### [QC Metrics](#qc_stats)
+- [Cell Barcode QC](#barcode_stats)
+- [Fragment Metrics](#fragment_stats)
+- [Saturation Metrics](#saturation_stats)
+- [10x Genomics Metrics](#tenx_stats)
+
+#### [QC Plots](#qc_plots)
+- [UMI Saturation Plot](#saturation_plot)
+- [Signal Saturation Plot](#signal_plot)
+- [Fragment Width Plot](#width_plot)
+- [All Cell Histograms](#all_hist_plot)
+- [Reads vs FRAlt Plot](#reads_fralt_plot)
+- [Reads vs FRIP Plot](#reads_frip_plot)
+- [FRIP vs FRITSS Plot](#frip_fritss_plot)
+- [RIP vs RITSS Plot](#rip_ritss_plot)
+- [Filtered Histograms](#filtered_hist_plot)
+
+[Write QC JSON](#json_out)
 
 #### [Session Info](#session_info)
 
@@ -167,9 +178,7 @@ print(c(
 
 [Return to Contents](#contents)
 
-<a id="load_inputs"></a>
-
-### Load inputs
+<a id="load_refs"></a>
 
 #### Load Reference Datasets
 ```{r Load references}
@@ -204,7 +213,7 @@ samplesheet <- read.csv(in_key)
 
 [Return to Contents](#contents)
 
-<a id="assemble_data"></a>
+<a id="assemble_meta"></a>
 
 ### Generate Metadata
 
@@ -629,6 +638,7 @@ qc_list <- list(report_type = "atac_qc",
 out_json <- file.path(out_dir, paste0(in_well, "_atac_qc_metrics.json"))
 ```
 
+[Return to Contents](#contents)
 
 <a id="barcode_stats"></a>
 
@@ -673,7 +683,11 @@ qc_list$barcode_qc_stats$metric <- c("barcodes_gt1k","barcodes_pass_qc","barcode
 qc_table(barcode_qc_stats)
 ```
 
-#### Read QC Stats
+[Return to Contents](#contents)
+
+<a id="fragment_stats"></a>
+
+#### Fragment QC stats
 ```{r}
 metrics_summary <- read.csv(in_sum)
 
@@ -713,6 +727,9 @@ qc_list$fragment_qc_stats$metric <- c("total_frags","mito_frags",
 qc_table(fragment_qc_stats)
 ```
 
+[Return to Contents](#contents)
+
+<a id="saturation_stats"></a>
 
 #### Saturation metrics
 ```{r}
@@ -786,7 +803,6 @@ signal_breaks <- signal_breaks[abs(signal_breaks$value - signal_breaks$signal_ra
 
 ```
 
-
 #### Display Break points for saturation of UMIs
 ```{r}
 # Abbreviated table for display
@@ -815,7 +831,7 @@ qc_list$saturation$signal_breaks <- as.list(signal_qc)
 qc_table(signal_qc)
 ```
 
-
+#### Saturation summary by sequencing depth
 ```{r}
 regular_break_idx <- which(saturation_projection$M_raw_reads %in% seq(200, 2000, by = 200))
 
@@ -830,6 +846,10 @@ qc_list$saturation$raw_breaks <- as.list(regular_qc)
 qc_table(regular_qc)
 ```
 
+[Return to Contents](#contents)
+
+<a id="tenx_stats"></a>
+
 #### 10x Metrics
 ```{r}
 tenx_metrics <- data.frame(metric = names(metrics_summary),
@@ -840,9 +860,13 @@ qc_list$tenx_metrics <- as.list(metrics_summary)
 qc_table(tenx_metrics)
 ```
 
+[Return to Contents](#contents)
+
 <a id="qc_plots"></a>
 
 ### QC Plots
+
+<a id="saturation_plot"></a>
 
 #### Plot Library Saturation
 ```{r}
@@ -897,6 +921,10 @@ if(nrow(saturation_breaks) > 0) {
 umi_saturation_plot
 ```
 
+[Return to Contents](#contents)
+
+<a id="signal_plot"></a>
+
 #### Plot saturation of signal UMIs
 ```{r}
 signal_saturation_plot <- ggplot() +
@@ -945,6 +973,9 @@ if(nrow(signal_breaks) > 0) {
 signal_saturation_plot
 ```
 
+[Return to Contents](#contents)
+
+<a id="width_plot"></a>
 
 #### Plot Fragment Widths
 ```{r}
@@ -972,8 +1003,11 @@ ggplot(data = frag_widths) +
   theme_bw()
 ```
 
+[Return to Contents](#contents)
 
-#### Plot QC Stats
+<a id="all_hist_plot"></a>
+
+#### Histograms for all cells
 ```{r}
 n_reads_hist <- qc_hist_plot(meta,
                              column = "n_unique",
@@ -1009,7 +1043,11 @@ cowplot::plot_grid(plotlist = plot_list,
                    nrow = 4, ncol = 1)
 ```
 
-#### Pairwise scatters
+[Return to Contents](#contents)
+
+<a id="reads_fralt_plot"></a>
+
+#### Reads vs FRAlt scatter
 ```{r}
 qc_scatter_plot(meta,
                 column_x = "n_unique",
@@ -1023,6 +1061,12 @@ qc_scatter_plot(meta,
   geom_hline(aes(yintercept = fralt_cut), linetype = "dashed", size = 0.2)
 ```
 
+
+[Return to Contents](#contents)
+
+<a id="reads_frip_plot"></a>
+
+#### Reads vs FRIP scatter
 ```{r}
 qc_scatter_plot(meta,
                 column_x = "n_unique",
@@ -1037,6 +1081,11 @@ qc_scatter_plot(meta,
 ```
 
 
+[Return to Contents](#contents)
+
+<a id="frip_fritss_plot"></a>
+
+#### FRIP vs FRITSS scatter
 ```{r}
 qc_scatter_plot(meta,
                 column_x = "frip",
@@ -1050,6 +1099,12 @@ qc_scatter_plot(meta,
   geom_hline(aes(yintercept = frip_cut), linetype = "dashed", size = 0.2)
 ```
 
+
+[Return to Contents](#contents)
+
+<a id="rip_ritss_plot"></a>
+
+#### RIP vs RITSS scatter
 ```{r}
 qc_scatter_plot(meta,
                 column_x = "peaks_count",
@@ -1061,7 +1116,11 @@ qc_scatter_plot(meta,
                 color = "orangered")
 ```
 
-#### Filtered QC Hists
+[Return to Contents](#contents)
+
+<a id="filtered_hist_plot"></a>
+
+#### Filtered QC Histograms
 ```{r}
 n_reads_hist <- qc_hist_plot(filtered_meta,
                              column = "n_unique",
