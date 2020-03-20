@@ -87,7 +87,7 @@ atac_lsi <- function(atac_matrix,
   tf_idf_res <- atac_tf_idf(atac_matrix,
                             site_frequency_threshold)
 
-  atac_svd(tf_idf_res$tf_idf_mat,
+  atac_svd(tf_idf_res$tf_idf,
            seed = seed)
 }
 
