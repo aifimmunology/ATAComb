@@ -496,6 +496,7 @@ window_5k_dt <- window_5k_dt[original_barcodes %in% filtered_meta$original_barco
 
 window_5k_dt <- window_5k_dt[window_5k_offsets, on = "chr"]
 window_5k_dt$i <- window_5k_dt$chr_i + window_5k_dt$offset
+window_5k_dt <- window_5k_dt[!is.na(original_barcodes)]
 ```
 
 #### Build 5k window list
@@ -545,6 +546,7 @@ window_20k_dt <- window_20k_dt[original_barcodes %in% filtered_meta$original_bar
 
 window_20k_dt <- window_20k_dt[window_20k_offsets, on = "chr"]
 window_20k_dt$i <- window_20k_dt$chr_i + window_20k_dt$offset
+window_20k_dt <- window_20k_dt[!is.na(original_barcodes)]
 ```
 
 #### Build 20k window list
@@ -594,6 +596,7 @@ window_100k_dt <- window_100k_dt[original_barcodes %in% filtered_meta$original_b
 
 window_100k_dt <- window_100k_dt[window_100k_offsets, on = "chr"]
 window_100k_dt$i <- window_100k_dt$chr_i + window_100k_dt$offset
+window_100k_dt <- window_100k_dt[!is.na(original_barcodes)]
 ```
 
 #### Build 100k window list
