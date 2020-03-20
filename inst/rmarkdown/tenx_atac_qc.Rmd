@@ -358,17 +358,17 @@ peaks_dt <- peaks_dt[original_barcodes %in% filtered_meta$original_barcodes]
 #### Build Peaks list
 ```{r Build Peaks h5}
 barcode_counts <- table(peaks_dt$original_barcodes)
-region_names <- paste(peaks_bed$V1,
-                      peaks_bed$V2,
-                      peaks_bed$V3,
-                      sep = "_")
+peak_names <- paste(peaks_bed$V1,
+                    peaks_bed$V2,
+                    peaks_bed$V3,
+                    sep = "_")
 peaks_list <- list(matrix = list(barcodes = names(barcode_counts),
                                  data = peaks_dt$x,
                                  indices = peaks_dt$i,
                                  indptr = c(0, unname(cumsum(barcode_counts))),
                                  shape = c(nrow(peaks_bed),
                                            nrow(filtered_meta)),
-                                 features = list(name = region_names)))
+                                 features = list(name = peak_names)))
 rm(peaks_dt)
 
 peaks_list$matrix$observations <- as.list(filtered_meta)
@@ -404,17 +404,17 @@ tss_dt <- tss_dt[original_barcodes %in% filtered_meta$original_barcodes]
 #### Build TSSs list
 ```{r Build TSS h5}
 barcode_counts <- table(tss_dt$original_barcodes)
-region_names <- paste(tss_bed$V1,
-                      tss_bed$V2,
-                      tss_bed$V3,
-                      sep = "_")
+tss_names <- paste(tss_bed$V1,
+                   tss_bed$V2,
+                   tss_bed$V3,
+                   sep = "_")
 tss_list <- list(matrix = list(barcodes = names(barcode_counts),
                                data = tss_dt$x,
                                indices = tss_dt$i,
                                indptr = c(0, cumsum(barcode_counts)),
                                shape = c(nrow(tss_bed),
                                          nrow(filtered_meta)),
-                               features = list(name = region_names)))
+                               features = list(name = tss_names)))
 rm(tss_dt)
 
 tss_list$matrix$observations <- as.list(filtered_meta)
@@ -450,17 +450,17 @@ gene_bodies_dt <- gene_bodies_dt[original_barcodes %in% filtered_meta$original_b
 #### Build Gene Bodies list
 ```{r Build Gene Bodies h5}
 barcode_counts <- table(gene_bodies_dt$original_barcodes)
-region_names <- paste(gene_bodies_bed$V1,
-                      gene_bodies_bed$V2,
-                      gene_bodies_bed$V3,
-                      sep = "_")
+gene_bodies_names <- paste(gene_bodies_bed$V1,
+                           gene_bodies_bed$V2,
+                           gene_bodies_bed$V3,
+                           sep = "_")
 gene_bodies_list <- list(matrix = list(barcodes = names(barcode_counts),
                                        data = gene_bodies_dt$x,
                                        indices = gene_bodies_dt$i,
                                        indptr = c(0, cumsum(barcode_counts)),
                                        shape = c(nrow(gene_bodies_bed),
                                                  nrow(filtered_meta)),
-                                       features = list(name = region_names)))
+                                       features = list(name = gene_bodies_names)))
 rm(gene_bodies_dt)
 
 gene_bodies_list$matrix$observations <- as.list(filtered_meta)
@@ -482,7 +482,7 @@ rm(gene_bodies_list)
 
 #### Read 5k window counts
 ```{r 5k Window Matrices}
-window_5k_offsets <- read_chrom_sizes("hg38", window_size = 5e3)
+window_5k_chr <- read_chrom_sizes("hg38", window_size = 5e3)
 window_5k_dt <- fread(paste0(in_prefix, "_window_5k_counts.tsv.gz"),
                       header = FALSE,
                       col.names = c("original_barcodes",
@@ -493,16 +493,18 @@ window_5k_dt <- fread(paste0(in_prefix, "_window_5k_counts.tsv.gz"),
                                         "integer" = c(3,4)))
 
 window_5k_dt <- window_5k_dt[original_barcodes %in% filtered_meta$original_barcodes]
+window_5k_offsets <- window_5k_chr[,c("chr","offset")]
 
 window_5k_dt <- window_5k_dt[window_5k_offsets, on = "chr"]
 window_5k_dt$i <- window_5k_dt$chr_i + window_5k_dt$offset
 window_5k_dt <- window_5k_dt[!is.na(original_barcodes)]
+window_5k_dt <- setorder(window_5k_dt, original_barcodes, i)
 ```
 
 #### Build 5k window list
 ```{r Build 5k Window h5}
-region_bed <- window_index_to_bed(1:sum(window_5k_offsets$n_windows),
-                                  window_5k_offsets,
+region_bed <- window_index_to_bed(1:sum(window_5k_chr$n_windows),
+                                  window_5k_chr,
                                   window_size = 5e3)
 region_names <- paste(region_bed$chr, region_bed$start, region_bed$end, sep = "_")
 barcode_counts <- table(window_5k_dt$original_barcodes)
@@ -510,9 +512,10 @@ window_5k_list <- list(matrix = list(barcodes = names(barcode_counts),
                                      data = window_5k_dt$x,
                                      indices = window_5k_dt$i,
                                      indptr = c(0, cumsum(barcode_counts)),
-                                     shape = c(sum(window_5k_offsets$n_windows),
+                                     shape = c(sum(window_5k_chr$n_windows),
                                                nrow(filtered_meta)),
-                                     features = list(name = region_names)))
+                                     features = list(id = 1:length(region_bed),
+                                                     name = region_names)))
 rm(window_5k_dt)
 
 window_5k_list$matrix$observations <- as.list(filtered_meta)
@@ -547,6 +550,7 @@ window_20k_dt <- window_20k_dt[original_barcodes %in% filtered_meta$original_bar
 window_20k_dt <- window_20k_dt[window_20k_offsets, on = "chr"]
 window_20k_dt$i <- window_20k_dt$chr_i + window_20k_dt$offset
 window_20k_dt <- window_20k_dt[!is.na(original_barcodes)]
+window_20k_dt <- setorder(window_20k_dt, original_barcodes, i)
 ```
 
 #### Build 20k window list
@@ -597,6 +601,7 @@ window_100k_dt <- window_100k_dt[original_barcodes %in% filtered_meta$original_b
 window_100k_dt <- window_100k_dt[window_100k_offsets, on = "chr"]
 window_100k_dt$i <- window_100k_dt$chr_i + window_100k_dt$offset
 window_100k_dt <- window_100k_dt[!is.na(original_barcodes)]
+window_100k_dt <- setorder(window_100k_dt, original_barcodes, i)
 ```
 
 #### Build 100k window list
@@ -910,19 +915,19 @@ umi_saturation_plot <- ggplot() +
 
 if(nrow(saturation_breaks) > 0) {
   umi_saturation_plot <- umi_saturation_plot +
-  geom_segment(data = saturation_breaks,
-               aes(x = 0, xend = n_raw_reads,
-                   y = expected_umis, yend = expected_umis),
-               linetype="dashed") +
-  geom_segment(data = saturation_breaks,
-               aes(x = n_raw_reads, xend = n_raw_reads,
-                   y = 0, yend = expected_umis),
-               linetype="dashed") +
-  geom_text(data = saturation_breaks,
-            aes(x = n_raw_reads, y = expected_umis + 1e7,
-                label = label),
-            hjust = 0,
-            vjust = 0)
+    geom_segment(data = saturation_breaks,
+                 aes(x = 0, xend = n_raw_reads,
+                     y = expected_umis, yend = expected_umis),
+                 linetype="dashed") +
+    geom_segment(data = saturation_breaks,
+                 aes(x = n_raw_reads, xend = n_raw_reads,
+                     y = 0, yend = expected_umis),
+                 linetype="dashed") +
+    geom_text(data = saturation_breaks,
+              aes(x = n_raw_reads, y = expected_umis + 1e7,
+                  label = label),
+              hjust = 0,
+              vjust = 0)
 }
 
 umi_saturation_plot
@@ -963,18 +968,18 @@ signal_saturation_plot <- ggplot() +
 
 if(nrow(signal_breaks) > 0) {
   signal_saturation_plot <- signal_saturation_plot +
-     geom_segment(data = signal_breaks,
-               aes(x = 0, xend = n_raw_reads,
-                   y = signal_umis, yend = signal_umis),
-               linetype="dashed") +
-  geom_segment(data = signal_breaks,
-               aes(x = n_raw_reads, xend = n_raw_reads,
-                   y = 0, yend = signal_umis),
-               linetype="dashed") +
-  geom_text(data = signal_breaks,
-            aes(x = n_raw_reads, y = signal_umis + 5e6,
-                label = label),
-            vjust = 0)
+    geom_segment(data = signal_breaks,
+                 aes(x = 0, xend = n_raw_reads,
+                     y = signal_umis, yend = signal_umis),
+                 linetype="dashed") +
+    geom_segment(data = signal_breaks,
+                 aes(x = n_raw_reads, xend = n_raw_reads,
+                     y = 0, yend = signal_umis),
+                 linetype="dashed") +
+    geom_text(data = signal_breaks,
+              aes(x = n_raw_reads, y = signal_umis + 5e6,
+                  label = label),
+              vjust = 0)
 }
 
 signal_saturation_plot
