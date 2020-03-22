@@ -113,6 +113,13 @@ stm(paste0("IN  SampleSheet      : ", in_key))
 stm(paste0("IN  Well ID          : ", in_well))
 stm(paste0("OUT Directory        : ", out_dir))
 ```
+```{r}
+in_pre <- "C:/datasets/X000/X027-AP0C1W1/preprocessed/"
+in_sin <- "C:/datasets/X000/X027-AP0C1W1/outs/singlecell.csv"
+in_sum <- "C:/datasets/X000/X027-AP0C1W1/outs/summary.csv"
+in_well <- "X027-AP0C1W1"
+```
+
 
 #### Input Parameters
 ```{r Print Arguments}
@@ -317,7 +324,7 @@ region_names <- paste(alt_idx_bed$V1,
                       sep = "_")
 alt_list <- list(matrix = list(barcodes = names(barcode_counts),
                                data = alt_dt$x,
-                               indices = alt_dt$i,
+                               indices = alt_dt$i - 1,
                                indptr = c(0, unname(cumsum(barcode_counts))),
                                shape = c(nrow(alt_idx_bed),
                                          nrow(filtered_meta)),
@@ -364,9 +371,9 @@ peak_names <- paste(peaks_bed$V1,
                     sep = "_")
 peaks_list <- list(matrix = list(barcodes = names(barcode_counts),
                                  data = peaks_dt$x,
-                                 indices = peaks_dt$i,
+                                 indices = peaks_dt$i - 1,
                                  indptr = c(0, unname(cumsum(barcode_counts))),
-                                 shape = c(nrow(peaks_bed),
+                                 shape = c(length(peak_names),
                                            nrow(filtered_meta)),
                                  features = list(name = peak_names)))
 rm(peaks_dt)
@@ -410,7 +417,7 @@ tss_names <- paste(tss_bed$V1,
                    sep = "_")
 tss_list <- list(matrix = list(barcodes = names(barcode_counts),
                                data = tss_dt$x,
-                               indices = tss_dt$i,
+                               indices = tss_dt$i - 1,
                                indptr = c(0, cumsum(barcode_counts)),
                                shape = c(nrow(tss_bed),
                                          nrow(filtered_meta)),
@@ -456,7 +463,7 @@ gene_bodies_names <- paste(gene_bodies_bed$V1,
                            sep = "_")
 gene_bodies_list <- list(matrix = list(barcodes = names(barcode_counts),
                                        data = gene_bodies_dt$x,
-                                       indices = gene_bodies_dt$i,
+                                       indices = gene_bodies_dt$i - 1,
                                        indptr = c(0, cumsum(barcode_counts)),
                                        shape = c(nrow(gene_bodies_bed),
                                                  nrow(filtered_meta)),
@@ -510,7 +517,7 @@ region_names <- paste(region_bed$chr, region_bed$start, region_bed$end, sep = "_
 barcode_counts <- table(window_5k_dt$original_barcodes)
 window_5k_list <- list(matrix = list(barcodes = names(barcode_counts),
                                      data = window_5k_dt$x,
-                                     indices = window_5k_dt$i,
+                                     indices = window_5k_dt$i - 1,
                                      indptr = c(0, cumsum(barcode_counts)),
                                      shape = c(sum(window_5k_chr$n_windows),
                                                nrow(filtered_meta)),
@@ -562,7 +569,7 @@ region_names <- paste(region_bed$chr, region_bed$start, region_bed$end, sep = "_
 barcode_counts <- table(window_20k_dt$original_barcodes)
 window_20k_list <- list(matrix = list(barcodes = names(barcode_counts),
                                       data = window_20k_dt$x,
-                                      indices = window_20k_dt$i,
+                                      indices = window_20k_dt$i - 1,
                                       indptr = c(0, cumsum(barcode_counts)),
                                       shape = c(sum(window_20k_offsets$n_windows),
                                                 nrow(filtered_meta)),
@@ -613,7 +620,7 @@ region_names <- paste(region_bed$chr, region_bed$start, region_bed$end, sep = "_
 barcode_counts <- table(window_100k_dt$original_barcodes)
 window_100k_list <- list(matrix = list(barcodes = names(barcode_counts),
                                        data = window_100k_dt$x,
-                                       indices = window_100k_dt$i,
+                                       indices = window_100k_dt$i - 1,
                                        indptr = c(0, cumsum(barcode_counts)),
                                        shape = c(sum(window_100k_offsets$n_windows),
                                                  nrow(filtered_meta)),
