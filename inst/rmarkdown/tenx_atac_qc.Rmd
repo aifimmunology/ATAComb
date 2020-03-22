@@ -113,13 +113,6 @@ stm(paste0("IN  SampleSheet      : ", in_key))
 stm(paste0("IN  Well ID          : ", in_well))
 stm(paste0("OUT Directory        : ", out_dir))
 ```
-```{r}
-in_pre <- "C:/datasets/X000/X027-AP0C1W1/preprocessed/"
-in_sin <- "C:/datasets/X000/X027-AP0C1W1/outs/singlecell.csv"
-in_sum <- "C:/datasets/X000/X027-AP0C1W1/outs/summary.csv"
-in_well <- "X027-AP0C1W1"
-```
-
 
 #### Input Parameters
 ```{r Print Arguments}
