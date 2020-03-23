@@ -14,6 +14,7 @@ params:
   in_sum: NULL
   in_key: NULL
   in_well: NULL
+  genome: NULL
   out_dir: NULL
 ---
 
@@ -87,6 +88,7 @@ if(is.null(params$in_pre)) {
   in_sum <- system.file("testdata/outs/summary.csv", package = "ATAComb")
   in_key <- system.file("testdata/test_SampleSheet.csv", package = "ATAComb")
   in_well <- "B000-AP0C1W1"
+  genome <- "hg38"
   out_dir <- tempdir()
 } else {
   in_pre <- params$in_pre
@@ -94,6 +96,7 @@ if(is.null(params$in_pre)) {
   in_sum <- params$in_sum
   in_key <- params$in_key
   in_well <- params$in_well
+  genome <- params$genome
   out_dir <- params$out_dir
 }
 
@@ -106,11 +109,18 @@ if(!grepl("^[A-Z][0-9]{3}-AP[0-9]C[0-9]W[0-9]$", in_well)) {
   stop()
 }
 
+# Check Genome
+if(!genome %in% c("hg38","hg19")) {
+  stm(paste0("Genome must be 'hg38' or 'hg19'. Genome provided: ", genome))
+  stop()
+}
+
 stm(paste0("IN  preprocessed dir : ", in_pre))
 stm(paste0("IN  singlecell.csv   : ", in_sin))
 stm(paste0("IN  summary.csv      : ", in_sum))
 stm(paste0("IN  SampleSheet      : ", in_key))
 stm(paste0("IN  Well ID          : ", in_well))
+stm(paste0("IN  Genome           : ", genome))
 stm(paste0("OUT Directory        : ", out_dir))
 ```
 
@@ -122,6 +132,7 @@ print(c(
   paste0("IN  summary.csv      : ", in_sum),
   paste0("IN  SampleSheet      : ", in_key),
   paste0("IN  Well ID          : ", in_well),
+  paste0("IN  Genome           : ", genome),
   paste0("OUT H5 directory     : ", out_dir)
 ))
 ```
@@ -183,25 +194,33 @@ print(c(
 
 #### Load Reference Datasets
 ```{r Load references}
+if(genome == "hg38") {
+  alt_idx_file <- system.file("reference/hg38_alt_dhs_index.bed.gz", package = "ATAComb")
+  peaks_file <- system.file("reference/hg38_GSE123577_filtered.bed.gz", package = "ATAComb")
+  gene_bodies_file <- system.file("reference/hg38_ensemble93_gene_bodies_gr.rds", package = "ATAComb")
+  tss_file <- system.file("reference/hg38_ensemble93_tss_2kb_gr.rds",package = "ATAComb")
+} else if(genome == "hg19") {
+  alt_idx_file <- system.file("reference/hg19_alt_dhs_index.bed.gz", package = "ATAComb")
+  peaks_file <- system.file("reference/hg19_GSE123577_filtered.bed.gz", package = "ATAComb")
+  gene_bodies_file <- system.file("reference/hg19_ensemble87_gene_bodies_gr.rds", package = "ATAComb")
+  tss_file <- system.file("reference/hg19_ensemble87_tss_2kb_gr.rds",package = "ATAComb")
+}
+
 # Altius Index
-alt_idx_file <- system.file("reference/hg38_alt_dhs_index.bed.gz", package = "ATAComb")
 stm(paste("Reading Altius Index from", alt_idx_file))
 alt_idx_bed <- fread(alt_idx_file)
 
 # Buenrostro Peak Reference
-peaks_file <- system.file("reference/hg38_GSE123577_filtered.bed.gz", package = "ATAComb")
 stm(paste("Reading Peak Reference from", peaks_file))
 peaks_bed <- fread(peaks_file)
 
 # Gene Body Reference
-gene_bodies_file <- system.file("reference/hg38_ensemble93_gene_bodies.bed.gz", package = "ATAComb")
 stm(paste("Reading ENSEMBL Gene Body Reference from", gene_bodies_file))
-gene_bodies_bed <- fread(gene_bodies_file)
+gene_bodies_gr <- readRDS(gene_bodies_file)
 
 # TSS Reference
-tss_file <- system.file("reference/hg38_ensemble93_tss_2kb.bed.gz",package = "ATAComb")
 stm(paste("Reading ENSEMBL TSS Reference from", tss_file))
-tss_bed <- fread(tss_file)
+tss_gr <- readRDS(tss_file)
 ```
 
 #### Load SampleSheet
@@ -404,9 +423,9 @@ tss_dt <- tss_dt[original_barcodes %in% filtered_meta$original_barcodes]
 #### Build TSSs list
 ```{r Build TSS h5}
 barcode_counts <- table(tss_dt$original_barcodes)
-tss_names <- paste(tss_bed$V1,
-                   tss_bed$V2,
-                   tss_bed$V3,
+tss_names <- paste(seqnames(tss_gr),
+                   start(tss_gr),
+                   end(tss_gr),
                    sep = "_")
 tss_list <- list(matrix = list(barcodes = names(barcode_counts),
                                data = tss_dt$x,
@@ -414,7 +433,9 @@ tss_list <- list(matrix = list(barcodes = names(barcode_counts),
                                indptr = c(0, cumsum(barcode_counts)),
                                shape = c(nrow(tss_bed),
                                          nrow(filtered_meta)),
-                               features = list(name = tss_names)))
+                               features = list(id = tss_gr$gene_id,
+                                               name = tss_names,
+                                               symbol = tss_gr$gene_name)))
 rm(tss_dt)
 
 tss_list$matrix$observations <- as.list(filtered_meta)
@@ -450,9 +471,9 @@ gene_bodies_dt <- gene_bodies_dt[original_barcodes %in% filtered_meta$original_b
 #### Build Gene Bodies list
 ```{r Build Gene Bodies h5}
 barcode_counts <- table(gene_bodies_dt$original_barcodes)
-gene_bodies_names <- paste(gene_bodies_bed$V1,
-                           gene_bodies_bed$V2,
-                           gene_bodies_bed$V3,
+gene_bodies_names <- paste(seqnames(gene_bodies_gr),
+                           start(gene_bodies_gr),
+                           end(gene_bodies_gr),
                            sep = "_")
 gene_bodies_list <- list(matrix = list(barcodes = names(barcode_counts),
                                        data = gene_bodies_dt$x,
@@ -460,7 +481,9 @@ gene_bodies_list <- list(matrix = list(barcodes = names(barcode_counts),
                                        indptr = c(0, cumsum(barcode_counts)),
                                        shape = c(nrow(gene_bodies_bed),
                                                  nrow(filtered_meta)),
-                                       features = list(name = gene_bodies_names)))
+                                       features = list(id = gene_bodies_gr$gene_id,
+                                                       name = gene_bodies_names,
+                                                       symbol = gene_bodies_gr$gene_name)))
 rm(gene_bodies_dt)
 
 gene_bodies_list$matrix$observations <- as.list(filtered_meta)
