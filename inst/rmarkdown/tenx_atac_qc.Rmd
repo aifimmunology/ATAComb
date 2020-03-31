@@ -39,9 +39,9 @@ params:
 - [Signal Saturation Plot](#signal_plot)
 - [Fragment Width Plot](#width_plot)
 - [All Cell Histograms](#all_hist_plot)
-- [Reads vs FRAlt Plot](#reads_fralt_plot)
-- [Reads vs FRIP Plot](#reads_frip_plot)
-- [FRIP vs FRITSS Plot](#frip_fritss_plot)
+- [Reads vs altius_frac Plot](#reads_altius_frac_plot)
+- [Reads vs peaks_frac Plot](#reads_peaks_frac_plot)
+- [peaks_frac vs tss_frac Plot](#peaks_frac_tss_frac_plot)
 - [RIP vs RITSS Plot](#rip_ritss_plot)
 - [Filtered Histograms](#filtered_hist_plot)
 
@@ -64,7 +64,6 @@ start_time <- Sys.time()
 quiet_library <- function(...) {
   suppressPackageStartupMessages(library(...))
 }
-quiet_library(rhdf5)
 quiet_library(ATAComb)
 quiet_library(H5weaver)
 quiet_library(Matrix)
@@ -72,6 +71,7 @@ quiet_library(S4Vectors)
 quiet_library(ggplot2)
 quiet_library(cowplot)
 quiet_library(jsonlite)
+quiet_library(purrr)
 options(stringsAsFactors = FALSE)
 ```
 
@@ -169,23 +169,23 @@ if(!dir.exists(out_dir)) {
 
 #### Declare QC Cutoffs
 ```{r}
-fralt_cut <- 0.5
-fritss_cut <- 0.2
-frip_cut <- 0.2
+cutoffs <- list(altius_frac = 0.5,
+                tss_frac = 0.2,
+                peaks_frac = 0.2)
 
 stm("Using QC Cutoffs:")
-stm(paste("QC FRAlt  : >",fralt_cut))
-stm(paste("QC FRITSS : >",fritss_cut))
-stm(paste("QC FRIP   : >",frip_cut))
+walk(seq_along(cutoffs),
+     function(x) {
+       stm(paste("QC",names(cutoffs)[x],": >", cutoffs[[x]]))
+     })
 ```
 
 ```{r}
-print(c(
-  "Using QC Cutoffs:",
-  paste("QC FRAlt  : >",fralt_cut),
-  paste("QC FRITSS : >",fritss_cut),
-  paste("QC FRIP   : >",frip_cut)
-))
+print("Using QC Cutoffs:")
+walk(seq_along(cutoffs),
+     function(x) {
+       print(paste("QC",names(cutoffs)[x],": >", cutoffs[[x]]))
+     })
 ```
 
 [Return to Contents](#contents)
@@ -194,33 +194,34 @@ print(c(
 
 #### Load Reference Datasets
 ```{r Load references}
-if(genome == "hg38") {
-  alt_idx_file <- system.file("reference/hg38_alt_dhs_index.bed.gz", package = "ATAComb")
-  peaks_file <- system.file("reference/hg38_GSE123577_filtered.bed.gz", package = "ATAComb")
-  gene_bodies_file <- system.file("reference/hg38_ensemble93_gene_bodies_gr.rds", package = "ATAComb")
-  tss_file <- system.file("reference/hg38_ensemble93_tss_2kb_gr.rds",package = "ATAComb")
-} else if(genome == "hg19") {
-  alt_idx_file <- system.file("reference/hg19_alt_dhs_index.bed.gz", package = "ATAComb")
-  peaks_file <- system.file("reference/hg19_GSE123577_filtered.bed.gz", package = "ATAComb")
-  gene_bodies_file <- system.file("reference/hg19_ensemble87_gene_bodies_gr.rds", package = "ATAComb")
-  tss_file <- system.file("reference/hg19_ensemble87_tss_2kb_gr.rds",package = "ATAComb")
-}
+stm(paste("Loading reference region sets for", genome))
+reference_files <- list.files(system.file("reference", package = "ATAComb"), 
+                              pattern = paste0(genome, ".+gr.rds"),
+                              full.names = TRUE)
+reference_names <- sub(paste0(".+",genome,"_"),"",reference_files)
+reference_names <- sub("_gr.rds","",reference_names)
 
-# Altius Index
-stm(paste("Reading Altius Index from", alt_idx_file))
-alt_idx_bed <- fread(alt_idx_file)
+stm(paste(c("Available references:", reference_names), collapse = " "))
 
-# Buenrostro Peak Reference
-stm(paste("Reading Peak Reference from", peaks_file))
-peaks_bed <- fread(peaks_file)
+reference_datasets <- map(reference_files,
+                          readRDS)
+reference_datasets <- map(reference_datasets, as.data.frame)
+names(reference_datasets) <- reference_names
 
-# Gene Body Reference
-stm(paste("Reading ENSEMBL Gene Body Reference from", gene_bodies_file))
-gene_bodies_gr <- readRDS(gene_bodies_file)
+reference_meta <- map(seq_along(reference_datasets),
+                      function(x) {
+                        dt <- reference_datasets[[x]]
+                        reference_name = reference_names[x]
+                        meta <- data.frame(name = paste0(dt$seqnames, "_", dt$start, "_", dt$end),
+                                           id = paste0(genome, "_", reference_name, "_", 1:nrow(dt)))
+                        if(ncol(dt) > 5) {
+                          meta <- cbind(meta, dt[6:ncol(dt)])
+                        }
+                        
+                        as.list(meta)
+                      })
 
-# TSS Reference
-stm(paste("Reading ENSEMBL TSS Reference from", tss_file))
-tss_gr <- readRDS(tss_file)
+names(reference_meta) <- reference_names
 ```
 
 #### Load SampleSheet
@@ -251,15 +252,25 @@ names(tenx_meta) <- c("original_barcodes","n_fragments","n_duplicate","n_mito","
 
 stm(paste0("Reading reference counts from ", in_pre))
 
-alt_idx_counts <- fread(paste0(in_prefix, "_altius_total_counts.tsv.gz"), header = FALSE, col.names = c("original_barcodes","altius_count"))
-peaks_counts <- fread(paste0(in_prefix, "_peaks_total_counts.tsv.gz"), header = FALSE, col.names = c("original_barcodes","peaks_count"))
-tss_counts <- fread(paste0(in_prefix, "_tss_total_counts.tsv.gz"), header = FALSE, col.names = c("original_barcodes","tss_count"))
-gene_bodies_counts <- fread(paste0(in_prefix, "_gene_bodies_total_counts.tsv.gz"), header = FALSE, col.names = c("original_barcodes","gene_bodies_count"))
+ref_count_files <- list.files(in_pre, pattern = "total_counts.tsv.gz", full.names = TRUE)
+ref_count_names <- sub(paste0(in_prefix,"_"), "", ref_count_files)
+ref_count_names <- sub("_total_counts.tsv.gz","",ref_count_names)
 
-meta <- tenx_meta[alt_idx_counts, on = "original_barcodes"]
-meta <- meta[peaks_counts, on = "original_barcodes"]
-meta <- meta[tss_counts, on = "original_barcodes"]
-meta <- meta[gene_bodies_counts, on = "original_barcodes"]
+ref_counts <- map(seq_along(ref_count_files),
+                  function(x) {
+                    fread(ref_count_files[x],
+                          header = FALSE,
+                          col.names = c("original_barcodes",
+                                        paste0(ref_count_names[x], "_count")))
+                  })
+
+meta <- tenx_meta
+for(i in seq_along(ref_counts)) {
+  meta <- meta[ref_counts[[i]], on = "original_barcodes"]
+  count_name <- paste0(ref_count_names[i], "_count")
+  frac_name <- paste0(ref_count_names[i], "_frac")
+  meta[[frac_name]] <- meta[[count_name]] / meta$n_unique
+}
 ```
 
 #### Generate cell IDs
@@ -287,12 +298,12 @@ meta$pbmc_sample_id <- in_sample
 ```{r}
 stm("Filtering based on QC cutoffs")
 
-meta$fralt <- meta$altius_count / meta$n_unique
-meta$frip <- meta$peaks_count / meta$n_unique
-meta$fritss <- meta$tss_count / meta$n_unique
-filtered_meta <- meta[fralt > fralt_cut & 
-                        frip > frip_cut &
-                        fritss > fritss_cut,]
+filtered_meta <- meta
+for(i in seq_along(cutoffs)) {
+  cut_name <- names(cutoffs)[i]
+  cut_val <- cutoffs[[i]]
+  filtered_meta <- meta[meta[[cut_name]] > cut_val]
+}
 ```
 
 #### Write unfiltered and filtered metadata
@@ -312,348 +323,139 @@ fwrite(filtered_meta, filtered_meta_out)
 
 ## Build Feature Matrices
 
-#### Read overlaps with Altius index
-```{r Altius overlaps}
-stm("Building Altius Index matrix")
+#### Find available matrices
+```{r}
+stm("Building feature matrices")
+feature_mat_files <- list.files(in_pre, pattern = "sparse_matrix.tsv.gz", full.names = TRUE)
+feature_mat_names <- sub(paste0(in_prefix,"_"), "", feature_mat_files)
+feature_mat_names <- sub("_sparse_matrix.tsv.gz","",feature_mat_names)
+stm(paste(c("Available matrices:", feature_mat_names), collapse = " "))
+```
 
-alt_dt <- fread(paste0(in_prefix, "_altius_sparse_matrix.tsv.gz"),
-                header = FALSE,
-                col.names = c("original_barcodes",
+
+#### Read overlaps and output results
+```{r Region Matrices}
+walk(seq_along(feature_mat_files),
+     function(x) {
+       mat_file <- feature_mat_files[x]
+       mat_name <- feature_mat_names[x]
+       
+       n_features <- nrow(reference_datasets[[mat_name]])
+       
+       stm(paste("Building",mat_name,"matrix"))
+       
+       dt <- fread(mat_file,
+                   header = FALSE,
+                   col.names = c("original_barcodes",
                               "i",
                               "x"),
                 colClasses = list("character" = 1,
                                   "integer" = c(2,3)))
-
-alt_dt <- alt_dt[original_barcodes %in% filtered_meta$original_barcodes]
-```
-
-#### Build Altius list
-```{r Build Altius h5}
-barcode_counts <- table(alt_dt$original_barcodes)
-region_names <- paste(alt_idx_bed$V1,
-                      alt_idx_bed$V2,
-                      alt_idx_bed$V3,
-                      sep = "_")
-alt_list <- list(matrix = list(barcodes = names(barcode_counts),
-                               data = alt_dt$x,
-                               indices = alt_dt$i - 1,
-                               indptr = c(0, unname(cumsum(barcode_counts))),
-                               shape = c(nrow(alt_idx_bed),
-                                         nrow(filtered_meta)),
-                               features = list(name = region_names,
-                                               id = alt_idx_bed$V4)))
-rm(alt_dt)
-
-alt_list$matrix$observations <- as.list(filtered_meta)
-```
-
-#### Write Altius Index .h5 file
-```{r Write Altius h5}
-alt_out_file <- paste0(out_prefix, "altius.h5")
-stm(paste("Writing Altius Index h5 file to", alt_out_file))
-write_h5_list(alt_list,
-              alt_out_file)
-
-rm(alt_list)
-```
-
-[Return to Contents](#contents)
-
-#### Read overlaps with Peaks reference
-```{r Peak overlaps}
-stm("Building Peak matrix")
-
-peaks_dt <- fread(paste0(in_prefix, "_peaks_sparse_matrix.tsv.gz"),
-                  header = FALSE,
-                  col.names = c("original_barcodes",
-                                "i",
-                                "x"),
-                  colClasses = list("character" = 1,
-                                    "integer" = c(2,3)))
-
-peaks_dt <- peaks_dt[original_barcodes %in% filtered_meta$original_barcodes]
-```
-
-#### Build Peaks list
-```{r Build Peaks h5}
-barcode_counts <- table(peaks_dt$original_barcodes)
-peak_names <- paste(peaks_bed$V1,
-                    peaks_bed$V2,
-                    peaks_bed$V3,
-                    sep = "_")
-peaks_list <- list(matrix = list(barcodes = names(barcode_counts),
-                                 data = peaks_dt$x,
-                                 indices = peaks_dt$i - 1,
-                                 indptr = c(0, unname(cumsum(barcode_counts))),
-                                 shape = c(length(peak_names),
-                                           nrow(filtered_meta)),
-                                 features = list(name = peak_names)))
-rm(peaks_dt)
-
-peaks_list$matrix$observations <- as.list(filtered_meta)
-```
-
-#### Write Peaks .h5 file
-```{r Write Peaks h5}
-peaks_out_file <- paste0(out_prefix, "peaks.h5")
-stm(paste("Writing peaks h5 file to", peaks_out_file))
-write_h5_list(peaks_list,
-              peaks_out_file)
-
-rm(peaks_list)
-```
-
-[Return to Contents](#contents)
-
-#### Read overlaps with TSS reference
-```{r TSS overlaps}
-stm("Building TSS matrix")
-
-tss_dt <- fread(paste0(in_prefix, "_tss_sparse_matrix.tsv.gz"),
-                header = FALSE,
-                col.names = c("original_barcodes",
-                              "i",
-                              "x"),
-                colClasses = list("character" = 1,
-                                  "integer" = c(2,3)))
-
-tss_dt <- tss_dt[original_barcodes %in% filtered_meta$original_barcodes]
-```
-
-#### Build TSSs list
-```{r Build TSS h5}
-barcode_counts <- table(tss_dt$original_barcodes)
-tss_names <- paste(seqnames(tss_gr),
-                   start(tss_gr),
-                   end(tss_gr),
-                   sep = "_")
-tss_list <- list(matrix = list(barcodes = names(barcode_counts),
-                               data = tss_dt$x,
-                               indices = tss_dt$i - 1,
-                               indptr = c(0, cumsum(barcode_counts)),
-                               shape = c(length(tss_gr),
-                                         nrow(filtered_meta)),
-                               features = list(id = tss_gr$gene_id,
-                                               name = tss_names,
-                                               symbol = tss_gr$gene_name)))
-rm(tss_dt)
-
-tss_list$matrix$observations <- as.list(filtered_meta)
-```
-
-#### Write TSSs .h5 file
-```{r Write TSSs h5}
-tss_out_file <- paste0(out_prefix, "tss.h5")
-stm(paste("Writing tss h5 file to", tss_out_file))
-write_h5_list(tss_list,
-              tss_out_file)
-
-rm(tss_list)
-```
-
-[Return to Contents](#contents)
-
-#### Read overlaps with Gene Bodies reference
-```{r Gene Bodies overlaps}
-stm("Building Gene Bodies matrix")
-
-gene_bodies_dt <- fread(paste0(in_prefix, "_gene_bodies_sparse_matrix.tsv.gz"),
-                        header = FALSE,
-                        col.names = c("original_barcodes",
-                                      "i",
-                                      "x"),
-                        colClasses = list("character" = 1,
-                                          "integer" = c(2,3)))
-
-gene_bodies_dt <- gene_bodies_dt[original_barcodes %in% filtered_meta$original_barcodes]
-```
-
-#### Build Gene Bodies list
-```{r Build Gene Bodies h5}
-barcode_counts <- table(gene_bodies_dt$original_barcodes)
-gene_bodies_names <- paste(seqnames(gene_bodies_gr),
-                           start(gene_bodies_gr),
-                           end(gene_bodies_gr),
-                           sep = "_")
-gene_bodies_list <- list(matrix = list(barcodes = names(barcode_counts),
-                                       data = gene_bodies_dt$x,
-                                       indices = gene_bodies_dt$i - 1,
-                                       indptr = c(0, cumsum(barcode_counts)),
-                                       shape = c(length(gene_bodies_gr),
-                                                 nrow(filtered_meta)),
-                                       features = list(id = gene_bodies_gr$gene_id,
-                                                       name = gene_bodies_names,
-                                                       symbol = gene_bodies_gr$gene_name)))
-rm(gene_bodies_dt)
-
-gene_bodies_list$matrix$observations <- as.list(filtered_meta)
-```
-
-Write Gene Bodies .h5 file
-```{r Write Gene Bodies h5}
-gene_bodies_out_file <- paste0(out_prefix, "gene_bodies.h5")
-stm(paste("Writing gene_bodies h5 file to", gene_bodies_out_file))
-write_h5_list(gene_bodies_list,
-              gene_bodies_out_file)
-
-rm(gene_bodies_list)
+       
+       dt <- dt[original_barcodes %in% filtered_meta$original_barcodes]
+       barcode_counts <- table(dt$original_barcodes)
+       new_barcodes <- filtered_meta$barcodes[match(names(barcode_counts), filtered_meta$original_barcodes)]
+       
+       mat_list <- list(matrix = list(barcodes = new_barcodes,
+                                      data = dt$x,
+                                      indices = dt$i - 1,
+                                      shape = c(n_features, nrow(filtered_meta)),
+                                      features = reference_meta[[mat_name]]))
+       rm(dt)
+       
+       out_file <- paste0(out_prefix, mat_name, ".h5")
+       stm(paste("Writing .h5 file to:", out_file))
+       write_h5_list(mat_list,
+                     out_file)
+     })
 ```
 
 [Return to Contents](#contents)
 
 ### Window count matrices
+```{r}
+stm("Building window matrices")
+window_mat_files <- list.files(in_pre, pattern = "window.+counts.tsv.gz", full.names = TRUE)
+window_mat_names <- sub(paste0(in_prefix,"_"), "", window_mat_files)
+window_mat_names <- sub("_counts.tsv.gz","",window_mat_names)
+stm(paste(c("Available matrices:", window_mat_names), collapse = " "))
 
-#### Read 5k window counts
-```{r 5k Window Matrices}
-window_5k_chr <- read_chrom_sizes("hg38", window_size = 5e3)
-window_5k_dt <- fread(paste0(in_prefix, "_window_5k_counts.tsv.gz"),
-                      header = FALSE,
-                      col.names = c("original_barcodes",
-                                    "chr",
-                                    "chr_i",
-                                    "x"),
-                      colClasses = list("character" = c(1,2),
-                                        "integer" = c(3,4)))
+window_sizes <- as.numeric(sub("window_([0-9]+)k","\\1",window_mat_names)) * 1000
 
-window_5k_dt <- window_5k_dt[original_barcodes %in% filtered_meta$original_barcodes]
-window_5k_offsets <- window_5k_chr[,c("chr","offset")]
+window_offsets <- map(window_sizes,
+                      function(size) {
+                        read_chrom_sizes(genome = genome,
+                                         window_size = size)
+                      })
+names(window_offsets) <- window_mat_names
 
-window_5k_dt <- window_5k_dt[window_5k_offsets, on = "chr"]
-window_5k_dt$i <- window_5k_dt$chr_i + window_5k_dt$offset
-window_5k_dt <- window_5k_dt[!is.na(original_barcodes)]
-window_5k_dt <- setorder(window_5k_dt, original_barcodes, i)
+window_metas <- map(seq_along(window_offsets),
+                   function(x) {
+                     offsets <- window_offsets[[x]]
+                     window_mat_name <- window_mat_names[x]
+                     window_size <- window_sizes[x]
+                     
+                     region_bed <- window_index_to_bed(1:sum(offsets$n_windows),
+                                                       offsets,
+                                                       window_size = window_size)
+                     region_bed$start <- as.character(format(region_bed$start, scientific = FALSE))
+                     region_bed$end <- as.character(format(region_bed$end, scientific = FALSE))
+                     data.frame(name = gsub(" +","",paste(region_bed$chr, region_bed$start, region_bed$end, sep = "_")),
+                                id = paste0(genome, "_", window_mat_name, "_", 1:nrow(region_bed)))
+                     
+                   })
+names(window_metas) <- window_mat_names
 ```
 
-#### Build 5k window list
-```{r Build 5k Window h5}
-region_bed <- window_index_to_bed(1:sum(window_5k_chr$n_windows),
-                                  window_5k_chr,
-                                  window_size = 5e3)
-region_names <- paste(region_bed$chr, region_bed$start, region_bed$end, sep = "_")
-barcode_counts <- table(window_5k_dt$original_barcodes)
-window_5k_list <- list(matrix = list(barcodes = names(barcode_counts),
-                                     data = window_5k_dt$x,
-                                     indices = window_5k_dt$i - 1,
-                                     indptr = c(0, cumsum(barcode_counts)),
-                                     shape = c(sum(window_5k_chr$n_windows),
-                                               nrow(filtered_meta)),
-                                     features = list(id = 1:length(region_bed),
-                                                     name = region_names)))
-rm(window_5k_dt)
-
-window_5k_list$matrix$observations <- as.list(filtered_meta)
-```
-
-#### Write 5k Window .h5 file
-```{r Write 5k Window h5}
-window_5k_out_file <- paste0(out_prefix, "window_5k.h5")
-stm(paste("Writing 5k Window h5 file to", window_5k_out_file))
-write_h5_list(window_5k_list,
-              window_5k_out_file)
-
-rm(window_5k_list)
-```
-
-[Return to Contents](#contents)
-
-#### Read 20k window counts
-```{r 20k Window Matrices}
-window_20k_offsets <- read_chrom_sizes("hg38", window_size = 2e4)
-window_20k_dt <- fread(paste0(in_prefix, "_window_20k_counts.tsv.gz"),
-                       header = FALSE,
-                       col.names = c("original_barcodes",
-                                     "chr",
-                                     "chr_i",
-                                     "x"),
-                       colClasses = list("character" = c(1,2),
-                                         "integer" = c(3,4)))
-
-window_20k_dt <- window_20k_dt[original_barcodes %in% filtered_meta$original_barcodes]
-
-window_20k_dt <- window_20k_dt[window_20k_offsets, on = "chr"]
-window_20k_dt$i <- window_20k_dt$chr_i + window_20k_dt$offset
-window_20k_dt <- window_20k_dt[!is.na(original_barcodes)]
-window_20k_dt <- setorder(window_20k_dt, original_barcodes, i)
-```
-
-#### Build 20k window list
-```{r Build 20k Window h5}
-region_bed <- window_index_to_bed(1:sum(window_20k_offsets$n_windows),
-                                  window_20k_offsets,
-                                  window_size = 2e4)
-region_names <- paste(region_bed$chr, region_bed$start, region_bed$end, sep = "_")
-barcode_counts <- table(window_20k_dt$original_barcodes)
-window_20k_list <- list(matrix = list(barcodes = names(barcode_counts),
-                                      data = window_20k_dt$x,
-                                      indices = window_20k_dt$i - 1,
-                                      indptr = c(0, cumsum(barcode_counts)),
-                                      shape = c(sum(window_20k_offsets$n_windows),
-                                                nrow(filtered_meta)),
-                                      features = list(name = region_names)))
-rm(window_20k_dt)
-
-window_20k_list$matrix$observations <- as.list(filtered_meta)
-```
-
-#### Write 20k window .h5 file
-```{r Write 20k Window h5}
-window_20k_out_file <- paste0(out_prefix, "window_20k.h5")
-stm(paste("Writing 20k Window h5 file to", window_20k_out_file))
-write_h5_list(window_20k_list,
-              window_20k_out_file)
-
-rm(window_20k_list)
-```
-
-[Return to Contents](#contents)
-
-#### Read 100k window counts
-```{r 100k Window Matrices}
-window_100k_offsets <- read_chrom_sizes("hg38", window_size = 1e5)
-window_100k_dt <- fread(paste0(in_prefix, "_window_100k_counts.tsv.gz"),
-                        header = FALSE,
-                        col.names = c("original_barcodes",
-                                      "chr",
-                                      "chr_i",
-                                      "x"),
-                        colClasses = list("character" = c(1,2),
-                                          "integer" = c(3,4)))
-
-window_100k_dt <- window_100k_dt[original_barcodes %in% filtered_meta$original_barcodes]
-
-window_100k_dt <- window_100k_dt[window_100k_offsets, on = "chr"]
-window_100k_dt$i <- window_100k_dt$chr_i + window_100k_dt$offset
-window_100k_dt <- window_100k_dt[!is.na(original_barcodes)]
-window_100k_dt <- setorder(window_100k_dt, original_barcodes, i)
-```
-
-#### Build 100k window list
-```{r Build 100k Window h5}
-region_bed <- window_index_to_bed(1:sum(window_100k_offsets$n_windows),
-                                  window_100k_offsets,
-                                  window_size = 1e5)
-region_names <- paste(region_bed$chr, region_bed$start, region_bed$end, sep = "_")
-barcode_counts <- table(window_100k_dt$original_barcodes)
-window_100k_list <- list(matrix = list(barcodes = names(barcode_counts),
-                                       data = window_100k_dt$x,
-                                       indices = window_100k_dt$i - 1,
-                                       indptr = c(0, cumsum(barcode_counts)),
-                                       shape = c(sum(window_100k_offsets$n_windows),
-                                                 nrow(filtered_meta)),
-                                       features = list(name = region_names)))
-rm(window_100k_dt)
-
-window_100k_list$matrix$observations <- as.list(filtered_meta)
-```
-
-#### Write 100k window .h5 file
-```{r Write 100k Window h5}
-window_100k_out_file <- paste0(out_prefix, "window_100k.h5")
-stm(paste("Writing 100k Window h5 file to", window_100k_out_file))
-write_h5_list(window_100k_list,
-              window_100k_out_file)
-
-rm(window_100k_list)
+#### Generate window matrices
+```{r Window Matrices}
+walk(seq_along(window_mat_files),
+     function(x) {
+       window_mat_file <- window_mat_files[x]
+       window_mat_name <- window_mat_names[x]
+       window_size <- window_sizes[x]
+       
+       offsets <- window_offsets[[window_mat_name]]
+       window_meta <- window_metas[[window_mat_name]]
+       
+       stm(paste("Building",window_mat_name,"matrix"))
+       
+       dt <- fread(window_mat_file,
+                   header = FALSE,
+                   col.names = c("original_barcodes",
+                                 "chr",
+                                 "chr_i",
+                                 "x"),
+                   colClasses = list("character" = c(1,2),
+                                     "integer" = c(3,4)))
+       
+       dt <- dt[original_barcodes %in% filtered_meta$original_barcodes]
+       offsets <- offsets[,c("chr","offset")]
+       
+       dt <- dt[offsets, on = "chr"]
+       dt$i <- dt$chr_i + dt$offset
+       dt <- dt[!is.na(original_barcodes)]
+       dt <- setorder(dt, original_barcodes, i)
+       
+       barcode_counts <- table(dt$original_barcodes)
+       new_barcodes <- filtered_meta$barcodes[match(names(barcode_counts), filtered_meta$original_barcodes)]
+       
+       window_list <- list(matrix = list(barcodes = new_barcodes,
+                                         data = dt$x,
+                                         indices = dt$i - 1,
+                                         indptr = c(0, cumsum(barcode_counts)),
+                                         shape = c(sum(offsets$n_windows),
+                                                   nrow(filtered_meta)),
+                                         features = window_meta))
+       rm(dt)
+       
+       window_list$matrix$observations <- as.list(filtered_meta)
+       
+       out_file <- paste0(out_prefix, window_mat_name, ".h5")
+       stm(paste("Writing .h5 file to:", out_file))
+       write_h5_list(window_list,
+                     out_file)
+     })
 ```
 
 [Return to Contents](#contents)
@@ -680,12 +482,12 @@ out_json <- paste0(out_prefix, "atac_qc_metrics.json")
 #### Barcode QC Stats
 ```{r}
 barcode_conditions <- list("all" = rep(TRUE, nrow(meta)),
-                           "pass_qc" = meta$fralt > fralt_cut & meta$frip > frip_cut & meta$fritss > fritss_cut,
-                           "fail_qc" = meta$fralt < fralt_cut | meta$frip < frip_cut | meta$fritss < fritss_cut,
-                           "fail_fralt" = meta$fralt < fralt_cut,
-                           "fail_frip" = meta$frip < frip_cut,
-                           "fail_fritss" = meta$fritss < fritss_cut,
-                           "fail_all" = meta$fralt < fralt_cut & meta$frip < frip_cut & meta$fritss < fritss_cut)
+                           "pass_qc" = meta$altius_frac > cutoffs$altus_frac & meta$peaks_frac > cutoffs$peaks_frac & meta$tss_frac > cutoffs$tss_frac,
+                           "fail_qc" = meta$altius_frac < cutoffs$altius_frac | meta$peaks_frac < cutoffs$peaks_frac | meta$tss_frac < cutoffs$tss_frac,
+                           "fail_altius_frac" = meta$altius_frac < cutoffs$altius_frac,
+                           "fail_peaks_frac" = meta$peaks_frac < cutoffs$peaks_frac,
+                           "fail_tss_frac" = meta$tss_frac < cutoffs$tss_frac,
+                           "fail_all" = meta$altius_frac < cutoffs$altius_frac & meta$peaks_frac < cutoffs$peaks_frac & meta$tss_frac < cutoffs$tss_frac)
 
 perc_of <- function(x, d) {
   round(sum(x) / d * 100, 2)
@@ -699,21 +501,21 @@ q_of <- function(x, target, q) {
 barcode_qc_stats <- data.frame(metric = c("Barcodes with > 1k reads",
                                           "Barcodes pass QC",
                                           "Barcodes fail QC",
-                                          "Barcodes fail FRAlt",
-                                          "Barcodes fail FRIP",
-                                          "Barcodes fail FRITSS",
+                                          "Barcodes fail altius_frac",
+                                          "Barcodes fail peaks_frac",
+                                          "Barcodes fail tss_frac",
                                           "Barcodes fail all"),
                                count = sapply(barcode_conditions, sum),
                                percent = sapply(barcode_conditions, perc_of, nrow(meta)),
                                median_fragments = sapply(barcode_conditions, q_of, meta$n_fragments, .50),
                                median_unique = sapply(barcode_conditions, q_of, meta$n_unique, .50),
-                               median_fralt = sapply(barcode_conditions, q_of, meta$fralt, .50),
-                               median_frip = sapply(barcode_conditions, q_of, meta$frip, .50),
-                               median_fritss = sapply(barcode_conditions, q_of, meta$fritss, .50))
+                               median_altius_frac = sapply(barcode_conditions, q_of, meta$altius_frac, .50),
+                               median_peaks_frac = sapply(barcode_conditions, q_of, meta$peaks_frac, .50),
+                               median_tss_frac = sapply(barcode_conditions, q_of, meta$tss_frac, .50))
 
 qc_list$barcode_qc_stats <- as.list(barcode_qc_stats)
 qc_list$barcode_qc_stats$metric <- c("barcodes_gt1k","barcodes_pass_qc","barcodes_fail_qc",
-                                     "barcodes_fail_fralt","barcodes_fail_frip","barcodes_fail_fritss","barcodes_fail_all")
+                                     "barcodes_fail_altius_frac","barcodes_fail_peaks_frac","barcodes_fail_tss_frac","barcodes_fail_all")
 
 qc_table(barcode_qc_stats)
 ```
@@ -1051,28 +853,28 @@ n_reads_hist <- qc_hist_plot(meta,
                              fill = "dodgerblue",
                              target = 2500,
                              y_max = 1000)
-fralt_hist <- qc_frac_hist_plot(meta,
-                                column = "fralt",
-                                name_x = "Frac Reads in Altius Index (FRAlt)",
+altius_frac_hist <- qc_frac_hist_plot(meta,
+                                column = "altius_frac",
+                                name_x = "Frac Reads in Altius Index (altius_frac)",
                                 fill = "darkgreen",
-                                target = fralt_cut,
+                                target = cutoffs$altius_frac,
                                 y_max = 8000)
-frip_hist <- qc_frac_hist_plot(meta,
-                               column = "frip",
-                               name_x = "Frac Reads in Peaks (FRIP)",
+peaks_frac_hist <- qc_frac_hist_plot(meta,
+                               column = "peaks_frac",
+                               name_x = "Frac Reads in Peaks (peaks_frac)",
                                fill = "mediumorchid3",
-                               target = frip_cut,
+                               target = cutoffs$peaks_frac,
                                y_max = 5000)
-fritss_hist <- qc_frac_hist_plot(meta,
-                                 column = "fritss",
-                                 name_x = "Frac Reads in TSS (FRITSS)",
+tss_frac_hist <- qc_frac_hist_plot(meta,
+                                 column = "tss_frac",
+                                 name_x = "Frac Reads in TSS (tss_frac)",
                                  fill = "orangered",
-                                 target = fritss_cut,
+                                 target = cutoffs$tss_frac,
                                  y_max = 5000)
 plot_list <- list(n_reads_hist,
-                  fralt_hist,
-                  frip_hist,
-                  fritss_hist)
+                  altius_frac_hist,
+                  peaks_frac_hist,
+                  tss_frac_hist)
 
 cowplot::plot_grid(plotlist = plot_list,
                    nrow = 4, ncol = 1)
@@ -1080,58 +882,58 @@ cowplot::plot_grid(plotlist = plot_list,
 
 [Return to Contents](#contents)
 
-<a id="reads_fralt_plot"></a>
+<a id="reads_altius_frac_plot"></a>
 
-#### Reads vs FRAlt scatter
+#### Reads vs altius_frac scatter
 ```{r}
 qc_scatter_plot(meta,
                 column_x = "n_unique",
                 name_x = "N Unique Fragments per Cell",
-                column_y = "fralt",
-                name_y = "Frac Fragments in Altius Index (FRAlt)",
+                column_y = "altius_frac",
+                name_y = "Frac Fragments in Altius Index (altius_frac)",
                 log_x = TRUE, log_y = FALSE, frac_y = TRUE,
                 show_targets = FALSE,
                 color = "darkgreen") +
   geom_vline(aes(xintercept = 2.5e3), linetype = "dashed", size = 0.2) +
-  geom_hline(aes(yintercept = fralt_cut), linetype = "dashed", size = 0.2)
+  geom_hline(aes(yintercept = cutoffs$altius_frac), linetype = "dashed", size = 0.2)
 ```
 
 
 [Return to Contents](#contents)
 
-<a id="reads_frip_plot"></a>
+<a id="reads_peaks_frac_plot"></a>
 
-#### Reads vs FRIP scatter
+#### Reads vs peaks_frac scatter
 ```{r}
 qc_scatter_plot(meta,
                 column_x = "n_unique",
                 name_x = "N Unique Fragments per Cell",
-                column_y = "frip",
-                name_y = "Frac Fragments in Peaks (FRIP)",
+                column_y = "peaks_frac",
+                name_y = "Frac Fragments in Peaks (peaks_frac)",
                 log_x = TRUE, log_y = FALSE, frac_y = TRUE,
                 show_targets = FALSE,
                 color = "darkgreen") +
   geom_vline(aes(xintercept = 2.5e3), linetype = "dashed", size = 0.2) +
-  geom_hline(aes(yintercept = frip_cut), linetype = "dashed", size = 0.2)
+  geom_hline(aes(yintercept = cutoffs$peaks_frac), linetype = "dashed", size = 0.2)
 ```
 
 
 [Return to Contents](#contents)
 
-<a id="frip_fritss_plot"></a>
+<a id="peaks_frac_tss_frac_plot"></a>
 
-#### FRIP vs FRITSS scatter
+#### peaks_frac vs tss_frac scatter
 ```{r}
 qc_scatter_plot(meta,
-                column_x = "frip",
-                name_x = "Frac Reads in Peaks (FRIP)",
-                column_y = "fritss",
-                name_y = "Frac Reads in TSS (FRITSS)",
+                column_x = "peaks_frac",
+                name_x = "Frac Reads in Peaks (peaks_frac)",
+                column_y = "tss_frac",
+                name_y = "Frac Reads in TSS (tss_frac)",
                 log_x = FALSE, frac_x = TRUE, log_y = FALSE, frac_y = TRUE,
                 show_targets = FALSE,
                 color = "mediumorchid3") +
-  geom_vline(aes(xintercept = fritss_cut), linetype = "dashed", size = 0.2) +
-  geom_hline(aes(yintercept = frip_cut), linetype = "dashed", size = 0.2)
+  geom_vline(aes(xintercept = cutoffs$tss_frac), linetype = "dashed", size = 0.2) +
+  geom_hline(aes(yintercept = cutoffs$peaks_frac), linetype = "dashed", size = 0.2)
 ```
 
 
@@ -1143,9 +945,9 @@ qc_scatter_plot(meta,
 ```{r}
 qc_scatter_plot(meta,
                 column_x = "peaks_count",
-                name_x = "N Reads in Peaks (FRIP)",
+                name_x = "N Reads in Peaks (peaks_frac)",
                 column_y = "tss_count",
-                name_y = "N Reads in TSS (FRITSS)",
+                name_y = "N Reads in TSS (tss_frac)",
                 log_x = TRUE, frac_x = FALSE, log_y = TRUE, frac_y = FALSE,
                 show_targets = TRUE,
                 color = "orangered")
@@ -1164,28 +966,28 @@ n_reads_hist <- qc_hist_plot(filtered_meta,
                              fill = "dodgerblue",
                              target = 2500,
                              y_max = 1000)
-fralt_hist <- qc_frac_hist_plot(filtered_meta,
-                                column = "fralt",
-                                name_x = "Frac Reads in Altius Index (FRAlt)",
+altius_frac_hist <- qc_frac_hist_plot(filtered_meta,
+                                column = "altius_frac",
+                                name_x = "Frac Reads in Altius Index (altius_frac)",
                                 fill = "darkgreen",
-                                target = fralt_cut,
+                                target = cutoffs$altius_frac,
                                 y_max = 8000)
-frip_hist <- qc_frac_hist_plot(filtered_meta,
-                               column = "frip",
-                               name_x = "Frac Reads in Peaks (FRIP)",
+peaks_frac_hist <- qc_frac_hist_plot(filtered_meta,
+                               column = "peaks_frac",
+                               name_x = "Frac Reads in Peaks (peaks_frac)",
                                fill = "mediumorchid3",
-                               target = frip_cut,
+                               target = cutoffs$peaks_frac,
                                y_max = 5000)
-fritss_hist <- qc_frac_hist_plot(filtered_meta,
-                                 column = "fritss",
-                                 name_x = "Frac Reads in TSS (FRITSS)",
+tss_frac_hist <- qc_frac_hist_plot(filtered_meta,
+                                 column = "tss_frac",
+                                 name_x = "Frac Reads in TSS (tss_frac)",
                                  fill = "orangered",
-                                 target = fritss_cut,
+                                 target = cutoffs$tss_frac,
                                  y_max = 5000)
 plot_list <- list(n_reads_hist,
-                  fralt_hist,
-                  frip_hist,
-                  fritss_hist)
+                  altius_frac_hist,
+                  peaks_frac_hist,
+                  tss_frac_hist)
 
 cowplot::plot_grid(plotlist = plot_list,
                    nrow = 4, ncol = 1)
