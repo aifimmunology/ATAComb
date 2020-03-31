@@ -1,7 +1,7 @@
 Package: ATAComb
 Type: Package
 Title: QC and Analysis of scATAC-seq data
-Version: 0.0.3
+Version: 0.0.4
 Author: Lucas Graybuck <lucasg@alleninstitute.org>
 Maintainer: Lucas Graybuck <lucasg@alleninstitute.org>
 Description: Functions and Rmarkdown files for QC and analysis of scATAC-seq datasets.
@@ -20,6 +20,7 @@ Imports:
   Matrix,
   parallel,
   preseqR,
+  purrr,
   RANN,
   vroom
 LazyData: true
