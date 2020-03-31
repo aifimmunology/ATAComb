@@ -27,7 +27,7 @@ alt_idx_raw <- fread(temp_file)
 
 alt_idx_bed <- alt_idx_raw[,c("seqname","start","end","identifier")]
 fwrite(alt_idx_bed,
-       "inst/reference/hg38_alt_dhs_index.bed.gz",
+       "inst/reference/hg38_altius.bed.gz",
        sep = "\t",
        quote = FALSE,
        col.names = FALSE,
@@ -39,7 +39,7 @@ alt_idx_gr <- GRanges(seqnames = alt_idx_raw$seqname,
                       identifier = alt_idx_raw$identifier)
 
 saveRDS(alt_idx_gr,
-        "inst/reference/hg38_alt_dhs_index_gr.rds")
+        "inst/reference/hg38_altius_gr.rds")
 
 # Conversion to hg19
 temp_chain <- tempfile(fileext = ".over.chain")
@@ -58,13 +58,13 @@ hg19_alt_idx <- unlist(hg19_alt_idx_lo[keep_hg19_lo])
 hg19_alt_idx <- sort(hg19_alt_idx, ignore.strand = TRUE)
 
 saveRDS(hg19_alt_idx,
-        "inst/reference/hg19_alt_dhs_index_gr.rds")
+        "inst/reference/hg19_altius_gr.rds")
 
 hg19_alt_idx_bed <- as.data.frame(hg19_alt_idx)
 hg19_alt_idx_bed <- hg19_alt_idx_bed[,c("seqnames","start","end","identifier")]
 
 fwrite(hg19_alt_idx_bed,
-       "inst/reference/hg19_alt_dh_index.bed.gz",
+       "inst/reference/hg19_altius.bed.gz",
        sep = "\t",
        quote = FALSE,
        col.names = FALSE,
@@ -92,12 +92,12 @@ hg38_gr <- sort(hg38_gr, ignore.strand = TRUE)
 hg19_gr <- hg19_gr[keep_lo]
 hg19_gr <- sort(hg19_gr, ignore.strand = TRUE)
 
-saveRDS(hg19_gr, "inst/reference/hg19_GSE123577_filtered_gr.rds")
-saveRDS(hg38_gr, "inst/reference/hg38_GSE123577_filtered_gr.rds")
+saveRDS(hg19_gr, "inst/reference/hg19_peaks_gr.rds")
+saveRDS(hg38_gr, "inst/reference/hg38_peaks_gr.rds")
 
 hg19_bed <- as.data.frame(hg19_gr)[,1:3]
 fwrite(hg19_bed,
-       "inst/reference/hg19_GSE123577_filtered.bed.gz",
+       "inst/reference/hg19_peaks.bed.gz",
        sep = "\t",
        quote = FALSE,
        col.names = FALSE,
@@ -105,13 +105,13 @@ fwrite(hg19_bed,
 
 hg38_bed <- as.data.frame(hg38_gr)[,1:3]
 fwrite(hg38_bed,
-       "inst/reference/hg38_GSE123577_filtered.bed.gz",
+       "inst/reference/hg38_peaks.bed.gz",
        sep = "\t",
        quote = FALSE,
        col.names = FALSE,
        row.names = FALSE)
 
-## TSS regions: ENSEMBL Hg38 v93
+## ENSEMBL Hg38 v93
 ## Couldn't download directly, so downloaded through browser from:
 ## ftp://ftp.ensembl.org/pub/release-93/gtf/homo_sapiens/
 
@@ -154,11 +154,11 @@ gene_gr <- GRanges(seqnames = keep_gtf$seqname,
 gene_gr <- sort(gene_gr, ignore.strand = TRUE)
 
 saveRDS(gene_gr,
-        "inst/reference/hg38_ensemble93_gene_bodies_gr.rds")
+        "inst/reference/hg38_gene_bodies_gr.rds")
 
 gene_bed <- as.data.frame(gene_gr)[,c(1:3, 6)]
 fwrite(gene_bed,
-       "inst/reference/hg38_ensemble93_gene_bodies.bed.gz",
+       "inst/reference/hg38_gene_bodies.bed.gz",
        sep = "\t",
        quote = FALSE,
        col.names = FALSE,
@@ -172,11 +172,11 @@ tss_2kb_gr <- resize(gene_gr,
 tss_2kb_gr <- GenomicRanges::sort(tss_2kb_gr, ignore.strand = TRUE)
 
 saveRDS(tss_2kb_gr,
-        "inst/reference/hg38_ensemble93_tss_2kb_gr.rds")
+        "inst/reference/hg38_tss_gr.rds")
 
 tss_2kb_bed <- as.data.frame(tss_2kb_gr)[,c(1:3, 6)]
 fwrite(tss_2kb_bed,
-       "inst/reference/hg38_ensemble93_tss_2kb.bed.gz",
+       "inst/reference/hg38_tss.bed.gz",
        sep = "\t",
        quote = FALSE,
        col.names = FALSE,
@@ -220,11 +220,11 @@ grr_gr <- c(up_regions, dn_regions)
 grr_gr <- sort(grr_gr, ignore.strand = TRUE)
 
 saveRDS(grr_gr,
-        "inst/reference/hg38_ensemble93_grr_gr.rds")
+        "inst/reference/hg38_grr_gr.rds")
 
 grr_bed <- as.data.frame(grr_gr)[,c(1:3, 6)]
 fwrite(grr_bed,
-       "inst/reference/hg38_ensemble93_grr.bed.gz",
+       "inst/reference/hg38_grr.bed.gz",
        sep = "\t",
        quote = FALSE,
        col.names = FALSE,
@@ -262,11 +262,11 @@ great_gr <- do.call("c", ext_chr_grs)
 great_gr <- sort(great_gr, ignore.strand = TRUE)
 
 saveRDS(great_gr,
-        "inst/reference/hg38_ensemble93_great_gr.rds")
+        "inst/reference/hg38_great_gr.rds")
 
 great_bed <- as.data.frame(great_gr)[,c(1:3, 6)]
 fwrite(great_bed,
-       "inst/reference/hg38_ensemble93_great.bed.gz",
+       "inst/reference/hg38_great.bed.gz",
        sep = "\t",
        quote = FALSE,
        col.names = FALSE,
@@ -287,6 +287,11 @@ gtf <- separate(gtf,
                 sep = ";",
                 into = c("gene_id","gene_version","gene_name","gene_source","gene_biotype"))
 
+gtf$gene_name <- sub('gene_name "([^"]+)"', "\\1", gtf$gene_name)
+gtf <- gtf[seqname != "MT"]
+gtf$seqname <- paste0("chr", gtf$seqname)
+gtf <- gtf[seqname %in% hg19_chrom_sizes$chr]
+
 temp_file <- tempfile(fileext = ".tar.gz")
 download.file("http://cf.10xgenomics.com/samples/cell-exp/1.0.0/pbmc3k/pbmc3k_filtered_gene_bc_matrices.tar.gz",
               temp_file, mode = "wb")
@@ -304,39 +309,129 @@ keep_gtf <- gtf[gene_id %in% tenx_feat$id]
 fwrite(keep_gtf,
        "inst/reference/hg19_ensemble87_tenx_genes.tsv.gz")
 
-gene_gr <- GRanges(seqnames = paste0("chr",gtf$seqname),
-                   ranges = IRanges(start = gtf$start,
-                                    end = gtf$end),
-                   strand = gtf$strand,
-                   gene_id = gtf$gene_id,
-                   gene_name = gtf$gene_name)
+# Gene Bodies
+gene_gr <- GRanges(seqnames = keep_gtf$seqname,
+                   ranges = IRanges(start = keep_gtf$start,
+                                    end = keep_gtf$end),
+                   strand = keep_gtf$strand,
+                   gene_id = keep_gtf$gene_id,
+                   gene_name = keep_gtf$gene_name)
 gene_gr <- sort(gene_gr, ignore.strand = TRUE)
 
 saveRDS(gene_gr,
-        "inst/reference/hg19_ensemble87_gene_bodies_gr.rds")
+        "inst/reference/hg19_gene_bodies_gr.rds")
 
 gene_bed <- as.data.frame(gene_gr)[,c(1:3, 6)]
 fwrite(gene_bed,
-       "inst/reference/hg19_ensemble87_gene_bodies.bed.gz",
+       "inst/reference/hg19_gene_bodies.bed.gz",
        sep = "\t",
        quote = FALSE,
        col.names = FALSE,
        row.names = FALSE)
 
+# TSS Regions
 tss_2kb_gr <- resize(gene_gr,
                      width = 4e3,
                      fix = "start")
 
-start(tss_2kb_gr)[start(tss_2kb_gr) < 1] <- 1
-
 tss_2kb_gr <- GenomicRanges::sort(tss_2kb_gr, ignore.strand = TRUE)
 
 saveRDS(tss_2kb_gr,
-        "inst/reference/hg19_ensemble87_tss_2kb_gr.rds")
+        "inst/reference/hg19_tss_gr.rds")
 
 tss_2kb_bed <- as.data.frame(tss_2kb_gr)[,c(1:3, 6)]
 fwrite(tss_2kb_bed,
-       "inst/reference/hg19_ensemble87_tss_2kb.bed.gz",
+       "inst/reference/hg19_tss.bed.gz",
+       sep = "\t",
+       quote = FALSE,
+       col.names = FALSE,
+       row.names = FALSE)
+
+# Gene Regulatory Regions
+# +/- 20kb from TSS, but exclude the TSS +/- 1kb
+hg19_chrom_sizes <- read_chrom_sizes("hg19")
+
+plus_genes <- gene_gr[strand(gene_gr) == "+"]
+minus_genes <- gene_gr[strand(gene_gr) == "-"]
+
+up_20kb_plus <- plus_genes
+start(up_20kb_plus) <- sapply(start(plus_genes), function(x) max(x - 2e4, 1))
+end(up_20kb_plus) <- sapply(start(plus_genes), function(x) max(x - 1e3, 2))
+
+dn_20kb_plus <- plus_genes
+plus_chr_sizes <- hg19_chrom_sizes$size[match(as.character(seqnames(plus_genes)), hg19_chrom_sizes$chr)]
+end(dn_20kb_plus) <- mapply(min,
+                            start(plus_genes) + 2e4,
+                            plus_chr_sizes)
+start(dn_20kb_plus) <- mapply(min,
+                              start(plus_genes) + 1e3,
+                              plus_chr_sizes - 1)
+
+up_20kb_minus <- minus_genes
+minus_chr_sizes <- hg19_chrom_sizes$size[match(as.character(seqnames(minus_genes)), hg19_chrom_sizes$chr)]
+end(up_20kb_minus) <- mapply(min, end(minus_genes) + 2e4, minus_chr_sizes)
+start(up_20kb_minus) <- mapply(min, end(minus_genes) + 1e3, minus_chr_sizes)
+
+dn_20kb_minus <- minus_genes
+start(dn_20kb_minus) <- sapply(end(minus_genes), function(x) max(x - 2e4, 1))
+end(dn_20kb_minus) <- sapply(end(minus_genes), function(x) max(x - 1e3, 2))
+
+up_regions <- c(up_20kb_plus, up_20kb_minus)
+up_regions$gene_id <- paste0(up_regions$gene_id, "-up")
+dn_regions <- c(dn_20kb_plus, dn_20kb_minus)
+dn_regions$gene_id <- paste0(dn_regions$gene_id, "-dn")
+
+grr_gr <- c(up_regions, dn_regions)
+grr_gr <- sort(grr_gr, ignore.strand = TRUE)
+
+saveRDS(grr_gr,
+        "inst/reference/hg19_grr_gr.rds")
+
+grr_bed <- as.data.frame(grr_gr)[,c(1:3, 6)]
+fwrite(grr_bed,
+       "inst/reference/hg19_grr.bed.gz",
+       sep = "\t",
+       quote = FALSE,
+       col.names = FALSE,
+       row.names = FALSE)
+
+# GREAT-like regions
+# Core region -5kb to +1kb; Extended up to 1Mb unless intersecting another core
+core_gr <- promoters(gene_gr, upstream = 5e3, downstream = 1e3)
+core_gr <- sort(core_gr, ignore.strand = TRUE)
+
+core_chrs <- unique(seqnames(core_gr))
+ext_chr_grs <- split(core_gr, seqnames(core_gr))
+
+ext_chr_grs <- lapply(core_chrs,
+                      function(x) {
+                        core_chr_gr <- ext_chr_grs[[x]]
+                        chr_length <- hg19_chrom_sizes$size[match(x, hg19_chrom_sizes$chr)]
+
+                        lag_core_dist <- start(core_chr_gr) - c(0, end(core_chr_gr)[1:(length(core_chr_gr) - 1)])
+                        lag_core_dist[lag_core_dist > 1e6] <- 1e6
+                        lag_core_dist[lag_core_dist < 0] <- 0
+                        start(core_chr_gr) <- start(core_chr_gr) - lag_core_dist
+                        start(core_chr_gr)[start(core_chr_gr) < 1] <- 1
+
+                        lead_core_dist <- c(start(core_chr_gr)[2:length(core_chr_gr)], chr_length) - end(core_chr_gr)
+                        lead_core_dist[lead_core_dist > 1e6] <- 1e6
+                        lead_core_dist[lead_core_dist < 0] <- 0
+                        end(core_chr_gr) <- end(core_chr_gr) + lead_core_dist
+                        end(core_chr_gr)[end(core_chr_gr) > chr_length] <- chr_length
+
+                        core_chr_gr
+                      })
+
+great_gr <- do.call("c", ext_chr_grs)
+great_gr <- sort(great_gr, ignore.strand = TRUE)
+
+saveRDS(great_gr,
+        "inst/reference/hg19_great_gr.rds")
+
+great_bed <- as.data.frame(great_gr)[,c(1:3, 6)]
+fwrite(great_bed,
+       "inst/reference/hg19_great.bed.gz",
        sep = "\t",
        quote = FALSE,
        col.names = FALSE,
