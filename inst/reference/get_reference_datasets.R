@@ -115,6 +115,8 @@ fwrite(hg38_bed,
 ## Couldn't download directly, so downloaded through browser from:
 ## ftp://ftp.ensembl.org/pub/release-93/gtf/homo_sapiens/
 
+hg38_chrom_sizes <- read_chrom_sizes("hg38")
+
 gtf <- fread("C:/Users/lucasg/Downloads/Homo_sapiens.GRCh38.93.gtf.gz")
 names(gtf) <- c("seqname","source","feature","start","end","score","strand","frame","attribute")
 gtf <- gtf[feature == "gene"]
@@ -128,11 +130,13 @@ gtf <- separate(gtf,
                 sep = ";",
                 into = c("gene_id","gene_version","gene_name","gene_source","gene_biotype"))
 
-temp_file <- tempfile(fileext = ".h5")
-download.file("http://cf.10xgenomics.com/samples/cell-exp/3.0.2/5k_pbmc_v3/5k_pbmc_v3_filtered_feature_bc_matrix.h5",
-              temp_file, mode = "wb")
+gtf$gene_name <- sub('gene_name "([^"]+)"', "\\1", gtf$gene_name)
+gtf <- gtf[seqname != "MT"]
+gtf$seqname <- paste0("chr", gtf$seqname)
+gtf <- gtf[seqname %in% hg38_chrom_sizes$chr]
 
-tenx_feat <- H5weaver::read_h5_feature_meta(temp_file)
+tenx_feat <- fread(system.file("reference/GRCh38_10x_gene_metadata.csv.gz",
+                               package = "H5weaver"))
 tenx_ensembl <- tenx_feat$id
 
 keep_gtf <- gtf[gene_id %in% tenx_ensembl]
@@ -140,12 +144,13 @@ keep_gtf <- gtf[gene_id %in% tenx_ensembl]
 fwrite(keep_gtf,
        "inst/reference/hg38_ensemble93_tenx_genes.tsv.gz")
 
-gene_gr <- GRanges(seqnames = paste0("chr",gtf$seqname),
-                   ranges = IRanges(start = gtf$start,
-                           end = gtf$end),
-                   strand = gtf$strand,
-                   gene_id = gtf$gene_id,
-                   gene_name = gtf$gene_name)
+# Gene Bodies
+gene_gr <- GRanges(seqnames = keep_gtf$seqname,
+                   ranges = IRanges(start = keep_gtf$start,
+                           end = keep_gtf$end),
+                   strand = keep_gtf$strand,
+                   gene_id = keep_gtf$gene_id,
+                   gene_name = keep_gtf$gene_name)
 gene_gr <- sort(gene_gr, ignore.strand = TRUE)
 
 saveRDS(gene_gr,
@@ -159,6 +164,7 @@ fwrite(gene_bed,
        col.names = FALSE,
        row.names = FALSE)
 
+# TSS Regions
 tss_2kb_gr <- resize(gene_gr,
                      width = 4e3,
                      fix = "start")
@@ -176,6 +182,95 @@ fwrite(tss_2kb_bed,
        col.names = FALSE,
        row.names = FALSE)
 
+# Gene Regulatory Regions
+# +/- 20kb from TSS, but exclude the TSS +/- 1kb
+hg38_chrom_sizes <- read_chrom_sizes("hg38")
+
+plus_genes <- gene_gr[strand(gene_gr) == "+"]
+minus_genes <- gene_gr[strand(gene_gr) == "-"]
+
+up_20kb_plus <- plus_genes
+start(up_20kb_plus) <- sapply(start(plus_genes), function(x) max(x - 2e4, 1))
+end(up_20kb_plus) <- sapply(start(plus_genes), function(x) max(x - 1e3, 2))
+
+dn_20kb_plus <- plus_genes
+plus_chr_sizes <- hg38_chrom_sizes$size[match(as.character(seqnames(plus_genes)), hg38_chrom_sizes$chr)]
+end(dn_20kb_plus) <- mapply(min,
+                            start(plus_genes) + 2e4,
+                            plus_chr_sizes)
+start(dn_20kb_plus) <- mapply(min,
+                              start(plus_genes) + 1e3,
+                              plus_chr_sizes - 1)
+
+up_20kb_minus <- minus_genes
+minus_chr_sizes <- hg38_chrom_sizes$size[match(as.character(seqnames(minus_genes)), hg38_chrom_sizes$chr)]
+end(up_20kb_minus) <- mapply(min, end(minus_genes) + 2e4, minus_chr_sizes)
+start(up_20kb_minus) <- mapply(min, end(minus_genes) + 1e3, minus_chr_sizes)
+
+dn_20kb_minus <- minus_genes
+start(dn_20kb_minus) <- sapply(end(minus_genes), function(x) max(x - 2e4, 1))
+end(dn_20kb_minus) <- sapply(end(minus_genes), function(x) max(x - 1e3, 2))
+
+up_regions <- c(up_20kb_plus, up_20kb_minus)
+up_regions$gene_id <- paste0(up_regions$gene_id, "-up")
+dn_regions <- c(dn_20kb_plus, dn_20kb_minus)
+dn_regions$gene_id <- paste0(dn_regions$gene_id, "-dn")
+
+grr_gr <- c(up_regions, dn_regions)
+grr_gr <- sort(grr_gr, ignore.strand = TRUE)
+
+saveRDS(grr_gr,
+        "inst/reference/hg38_ensemble93_grr_gr.rds")
+
+grr_bed <- as.data.frame(grr_gr)[,c(1:3, 6)]
+fwrite(grr_bed,
+       "inst/reference/hg38_ensemble93_grr.bed.gz",
+       sep = "\t",
+       quote = FALSE,
+       col.names = FALSE,
+       row.names = FALSE)
+
+# GREAT-like regions
+# Core region -5kb to +1kb; Extended up to 1Mb unless intersecting another core
+core_gr <- promoters(gene_gr, upstream = 5e3, downstream = 1e3)
+core_gr <- sort(core_gr, ignore.strand = TRUE)
+
+core_chrs <- unique(seqnames(core_gr))
+ext_chr_grs <- split(core_gr, seqnames(core_gr))
+
+ext_chr_grs <- lapply(core_chrs,
+                      function(x) {
+                        core_chr_gr <- ext_chr_grs[[x]]
+                        chr_length <- hg38_chrom_sizes$size[match(x, hg38_chrom_sizes$chr)]
+
+                        lag_core_dist <- start(core_chr_gr) - c(0, end(core_chr_gr)[1:(length(core_chr_gr) - 1)])
+                        lag_core_dist[lag_core_dist > 1e6] <- 1e6
+                        lag_core_dist[lag_core_dist < 0] <- 0
+                        start(core_chr_gr) <- start(core_chr_gr) - lag_core_dist
+                        start(core_chr_gr)[start(core_chr_gr) < 1] <- 1
+
+                        lead_core_dist <- c(start(core_chr_gr)[2:length(core_chr_gr)], chr_length) - end(core_chr_gr)
+                        lead_core_dist[lead_core_dist > 1e6] <- 1e6
+                        lead_core_dist[lead_core_dist < 0] <- 0
+                        end(core_chr_gr) <- end(core_chr_gr) + lead_core_dist
+                        end(core_chr_gr)[end(core_chr_gr) > chr_length] <- chr_length
+
+                        core_chr_gr
+                      })
+
+great_gr <- do.call("c", ext_chr_grs)
+great_gr <- sort(great_gr, ignore.strand = TRUE)
+
+saveRDS(great_gr,
+        "inst/reference/hg38_ensemble93_great_gr.rds")
+
+great_bed <- as.data.frame(great_gr)[,c(1:3, 6)]
+fwrite(great_bed,
+       "inst/reference/hg38_ensemble93_great.bed.gz",
+       sep = "\t",
+       quote = FALSE,
+       col.names = FALSE,
+       row.names = FALSE)
 
 ## Same process for hg19/GRCh37 build 87
 
