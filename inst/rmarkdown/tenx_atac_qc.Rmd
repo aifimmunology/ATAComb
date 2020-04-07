@@ -148,7 +148,7 @@ if(!file.exists(in_sin)) {
   stop()
 }
 if(!file.exists(in_sum)) {
-  stm(paste0("ERROR: Cannot find IN summary.csv:", in_sum))
+  stm(paste0("ERROR: Cannot find IN summary.csv or barcode_counts.csv:", in_sum))
   stop()
 }
 if(!file.exists(in_key)) {
@@ -252,7 +252,6 @@ if(grepl("singlecell.csv", in_sin)) {
   names(tenx_meta) <- c("original_barcodes","n_fragments","n_duplicate","n_mito","n_unique")
 } else if(grepl("barcode_counts.csv", in_sin)) {
   stm("Using barcode_counts.csv")
-  stm("Warning: n_fragments will not be accurate.")
   tenx_meta <- fread(in_sin)
   names(tenx_meta) <- c("original_barcodes", "n_fragments")
   tenx_meta$n_unique <- tenx_meta$n_fragments
@@ -534,40 +533,60 @@ qc_table(barcode_qc_stats)
 
 #### Fragment QC stats
 ```{r}
-metrics_summary <- read.csv(in_sum)
+if(file.exists(in_sum)) {
+  metrics_summary <- read.csv(in_sum)
+  
+  saturation_counts <- fread(paste0(in_prefix, "_saturation_curve.tsv.gz"),
+                             header = F,
+                             col.names = c("count", "frequency"))
+  saturation_counts$count <- as.numeric(sub("\\r","",saturation_counts$count))
+  
+  fragment_qc_stats <- data.frame(metric = c("Sequenced Fragments",
+                                             "Mitochondrial Fragments",
+                                             "Total in Barcodes with > 1k Reads",
+                                             "Total in Barcodes passing QC",
+                                             "Total in Barcodes failing QC",
+                                             "Total Unique",
+                                             "Unique in Barcodes with > 1k Reads",
+                                             "Unique in Barcodes passing QC",
+                                             "Unique in Barcodes failing QC"),
+                                  count = c(metrics_summary$num_fragments,
+                                            ceiling(metrics_summary$num_fragments * metrics_summary$frac_waste_mitochondrial),
+                                            sum(meta$n_fragments),
+                                            sum(filtered_meta$n_fragments),
+                                            sum(meta$n_fragments) - sum(filtered_meta$n_fragments),
+                                            sum(saturation_counts$frequency),
+                                            sum(meta$n_unique),
+                                            sum(filtered_meta$n_unique),
+                                            sum(meta$n_unique) - sum(filtered_meta$n_unique)))
+  fragment_qc_stats$millions <- round(fragment_qc_stats$count / 1e6, 2)
+  fragment_qc_stats$percent_of_sequenced <- round(fragment_qc_stats$count / fragment_qc_stats$count[1] * 100, 2)
+  fragment_qc_stats$percent_of_unique <- round(fragment_qc_stats$count / sum(saturation_counts$frequency) * 100, 2)
+  fragment_qc_stats$percent_of_unique[1:5] <- NA
+  
+  qc_list$fragment_qc_stats <- as.list(fragment_qc_stats)
+  qc_list$fragment_qc_stats$metric <- c("total_frags","mito_frags",
+                                        "total_frags_gt1k","total_frags_pass_qc","total_frags_fail_qc",
+                                        "unique_frags","unique_frags_gt1k","unique_frags_pass_qc","unique_frags_fail_qc")
+} else {
+  saturation_counts <- fread(paste0(in_prefix, "_saturation_curve.tsv.gz"),
+                             header = F,
+                             col.names = c("count", "frequency"))
+  saturation_counts$count <- as.numeric(sub("\\r","",saturation_counts$count))
+  
+  fragment_qc_stats <- data.frame(metric = c("Total Unique",
+                                             "Unique in Barcodes with > 1k Reads",
+                                             "Unique in Barcodes passing QC",
+                                             "Unique in Barcodes failing QC"),
+                                  count = c(sum(meta$n_unique),
+                                            sum(filtered_meta$n_unique),
+                                            sum(meta$n_unique) - sum(filtered_meta$n_unique)))
+  fragment_qc_stats$millions <- round(fragment_qc_stats$count / 1e6, 2)
+  fragment_qc_stats$percent_of_unique <- round(fragment_qc_stats$count / sum(saturation_counts$frequency) * 100, 2)
 
-saturation_counts <- fread(paste0(in_prefix, "_saturation_curve.tsv.gz"),
-                           header = F,
-                           col.names = c("count", "frequency"))
-saturation_counts$count <- as.numeric(sub("\\r","",saturation_counts$count))
-
-fragment_qc_stats <- data.frame(metric = c("Sequenced Fragments",
-                                           "Mitochondrial Fragments",
-                                           "Total in Barcodes with > 1k Reads",
-                                           "Total in Barcodes passing QC",
-                                           "Total in Barcodes failing QC",
-                                           "Total Unique",
-                                           "Unique in Barcodes with > 1k Reads",
-                                           "Unique in Barcodes passing QC",
-                                           "Unique in Barcodes failing QC"),
-                                count = c(metrics_summary$num_fragments,
-                                          ceiling(metrics_summary$num_fragments * metrics_summary$frac_waste_mitochondrial),
-                                          sum(meta$n_fragments),
-                                          sum(filtered_meta$n_fragments),
-                                          sum(meta$n_fragments) - sum(filtered_meta$n_fragments),
-                                          sum(saturation_counts$frequency),
-                                          sum(meta$n_unique),
-                                          sum(filtered_meta$n_unique),
-                                          sum(meta$n_unique) - sum(filtered_meta$n_unique)))
-fragment_qc_stats$millions <- round(fragment_qc_stats$count / 1e6, 2)
-fragment_qc_stats$percent_of_sequenced <- round(fragment_qc_stats$count / fragment_qc_stats$count[1] * 100, 2)
-fragment_qc_stats$percent_of_unique <- round(fragment_qc_stats$count / sum(saturation_counts$frequency) * 100, 2)
-fragment_qc_stats$percent_of_unique[1:5] <- NA
-
-qc_list$fragment_qc_stats <- as.list(fragment_qc_stats)
-qc_list$fragment_qc_stats$metric <- c("total_frags","mito_frags",
-                                      "total_frags_gt1k","total_frags_pass_qc","total_frags_fail_qc",
-                                      "unique_frags","unique_frags_gt1k","unique_frags_pass_qc","unique_frags_fail_qc")
+  qc_list$fragment_qc_stats <- as.list(fragment_qc_stats)
+  qc_list$fragment_qc_stats$metric <- c("unique_frags","unique_frags_gt1k","unique_frags_pass_qc","unique_frags_fail_qc")
+}
 
 qc_table(fragment_qc_stats)
 ```
@@ -578,6 +597,7 @@ qc_table(fragment_qc_stats)
 
 #### Saturation metrics
 ```{r}
+if(file.exists(in_sum)) {
 stm("Generating library diversity projection")
 
 saturation_mat <- as.matrix(as.data.frame(saturation_counts))
@@ -611,10 +631,12 @@ saturation_projection$signal_ratio[1] <- 0
 saturation_projection$M_raw_reads <- round(saturation_projection$n_raw_reads/1e6, 2)
 saturation_projection$M_umis <- round(saturation_projection$expected_umis/1e6, 2)
 saturation_projection$M_signal_umis <- round(saturation_projection$signal_umis/1e6,2)
+}
 ```
 
 #### Output projection values
 ```{r}
+if(file.exists(in_sum)){
 out_proj <- paste0(out_prefix, "saturation_projection.csv.gz")
 stm(paste0("OUT Sat. Projection   : ", out_proj))
 print(paste0("OUT Sat. Projection    : ", out_proj))
@@ -622,10 +644,12 @@ stm(paste("Writing Saturation Projection to", out_proj))
 
 fwrite(saturation_projection,
        out_proj)
+}
 ```
 
 #### Compute Break-points for specific ratios of raw reads to UMIs or signal UMIs
 ```{r}
+if(file.exists(in_sum)) {
 # 2:1, 3:1, and 4:1 break points for total UMIs
 saturation_break_idx <- sapply(2:4, function(x) which.min(abs(saturation_projection$ratio-x)))
 
@@ -645,11 +669,12 @@ signal_breaks$label <- c("2:1","4:1","16:1")
 signal_breaks$value <- c(4,8,16)
 
 signal_breaks <- signal_breaks[abs(signal_breaks$value - signal_breaks$signal_ratio) < 0.1,]
-
+}
 ```
 
 #### Display Break points for saturation of UMIs
 ```{r}
+if(file.exists(in_sum)) {
 # Abbreviated table for display
 saturation_qc <- data.frame(break_target = saturation_breaks$value,
                             umi_ratio = round(saturation_breaks$ratio,2),
@@ -661,10 +686,12 @@ qc_list$saturation <- list()
 qc_list$saturation$umi_breaks <- as.list(saturation_qc)
 
 qc_table(saturation_qc)
+}
 ```
 
 #### Display Break points for saturation of signal UMIs
 ```{r}
+if(file.exists(in_sum)) {
 signal_qc <- data.frame(break_target = signal_breaks$value,
                         signal_ratio = round(signal_breaks$signal_ratio, 2),
                         M_raw_reads = signal_breaks$M_raw_reads,
@@ -674,10 +701,12 @@ signal_qc <- data.frame(break_target = signal_breaks$value,
 qc_list$saturation$signal_breaks <- as.list(signal_qc)
 
 qc_table(signal_qc)
+}
 ```
 
 #### Saturation summary by sequencing depth
 ```{r}
+if(file.exists(in_sum)) {
 regular_break_idx <- which(saturation_projection$M_raw_reads %in% seq(200, 2000, by = 200))
 
 regular_qc <- data.frame(umi_ratio = round(saturation_projection$ratio[regular_break_idx], 2),
@@ -689,6 +718,7 @@ regular_qc <- data.frame(umi_ratio = round(saturation_projection$ratio[regular_b
 qc_list$saturation$raw_breaks <- as.list(regular_qc)
 
 qc_table(regular_qc)
+}
 ```
 
 [Return to Contents](#contents)
@@ -697,12 +727,14 @@ qc_table(regular_qc)
 
 #### 10x Metrics
 ```{r}
+if(file.exists(in_sum)) {
 tenx_metrics <- data.frame(metric = names(metrics_summary),
                            values = round(unlist(as.numeric(metrics_summary[1,])), 4))
 
 qc_list$tenx_metrics <- as.list(metrics_summary)
 
 qc_table(tenx_metrics)
+}
 ```
 
 [Return to Contents](#contents)
@@ -715,6 +747,7 @@ qc_table(tenx_metrics)
 
 #### Plot Library Saturation
 ```{r}
+if(file.exists(in_sum)) {
 reference_projections <- fread(system.file("reference/saturation/reference_projections.csv",
                                            package = "ATAComb"))
 reference_projections$dataset <- paste0("ref_",reference_projections$dataset)
@@ -764,6 +797,7 @@ if(nrow(saturation_breaks) > 0) {
 }
 
 umi_saturation_plot
+}
 ```
 
 [Return to Contents](#contents)
@@ -772,6 +806,7 @@ umi_saturation_plot
 
 #### Plot saturation of signal UMIs
 ```{r}
+if(file.exists(in_sum)) {
 signal_saturation_plot <- ggplot() +
   geom_line(data = reference_projections,
             aes(x = n_raw_reads,
@@ -816,6 +851,7 @@ if(nrow(signal_breaks) > 0) {
 }
 
 signal_saturation_plot
+}
 ```
 
 [Return to Contents](#contents)
