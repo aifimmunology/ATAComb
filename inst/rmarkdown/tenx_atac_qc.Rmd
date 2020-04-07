@@ -246,9 +246,17 @@ out_prefix <- file.path(out_dir, paste0(in_batch, "_", in_sample, "_"))
 ```{r}
 stm(paste0("Reading 10x metadata from ", in_sin))
 
-tenx_meta <- fread(in_sin)[-1,]
-tenx_meta <- tenx_meta[, list(barcode, total, duplicate,mitochondrial , passed_filters)]
-names(tenx_meta) <- c("original_barcodes","n_fragments","n_duplicate","n_mito","n_unique")
+if(grepl("singlecell.csv", in_sin)) {
+  tenx_meta <- fread(in_sin)[-1,]
+  tenx_meta <- tenx_meta[, list(barcode, total, duplicate,mitochondrial , passed_filters)]
+  names(tenx_meta) <- c("original_barcodes","n_fragments","n_duplicate","n_mito","n_unique")
+} else if(grepl("barcode_counts.csv", in_sin)) {
+  stm("Using barcode_counts.csv")
+  stm("Warning: n_fragments will not be accurate.")
+  tenx_meta <- fread(in_sin)
+  names(tenx_meta) <- c("original_barcodes", "n_fragments")
+  tenx_meta$n_unique <- tenx_meta$n_fragments
+}
 
 stm(paste0("Reading reference counts from ", in_pre))
 
