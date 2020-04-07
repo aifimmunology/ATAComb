@@ -569,6 +569,11 @@ if(file.exists(in_sum)) {
                                         "total_frags_gt1k","total_frags_pass_qc","total_frags_fail_qc",
                                         "unique_frags","unique_frags_gt1k","unique_frags_pass_qc","unique_frags_fail_qc")
 } else {
+  saturation_counts <- fread(paste0(in_prefix, "_saturation_curve.tsv.gz"),
+                             header = F,
+                             col.names = c("count", "frequency"))
+  saturation_counts$count <- as.numeric(sub("\\r","",saturation_counts$count))
+  
   fragment_qc_stats <- data.frame(metric = c("Total Unique",
                                              "Unique in Barcodes with > 1k Reads",
                                              "Unique in Barcodes passing QC",
