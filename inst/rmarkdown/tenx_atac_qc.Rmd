@@ -144,7 +144,7 @@ if(!dir.exists(in_pre)) {
   stop()
 }
 if(!file.exists(in_sin)) {
-  stm(paste0("ERROR: Cannot find IN singlecell.csv or barcode_counts.csv:", in_sin))
+  stm(paste0("ERROR: Cannot find IN singlecell.csv or barcode_counts.tsv:", in_sin))
   stop()
 }
 if(!file.exists(in_sum)) {
@@ -250,8 +250,8 @@ if(grepl("singlecell.csv", in_sin)) {
   tenx_meta <- fread(in_sin)[-1,]
   tenx_meta <- tenx_meta[, list(barcode, total, duplicate,mitochondrial , passed_filters)]
   names(tenx_meta) <- c("original_barcodes","n_fragments","n_duplicate","n_mito","n_unique")
-} else if(grepl("barcode_counts.csv", in_sin)) {
-  stm("Using barcode_counts.csv")
+} else if(grepl("barcode_counts.tsv", in_sin)) {
+  stm("Using barcode_counts.tsv")
   tenx_meta <- fread(in_sin)
   names(tenx_meta) <- c("original_barcodes", "n_fragments")
   tenx_meta$n_unique <- tenx_meta$n_fragments
