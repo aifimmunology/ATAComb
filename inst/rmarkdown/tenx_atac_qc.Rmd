@@ -573,7 +573,8 @@ if(file.exists(in_sum)) {
                                              "Unique in Barcodes with > 1k Reads",
                                              "Unique in Barcodes passing QC",
                                              "Unique in Barcodes failing QC"),
-                                  count = c(sum(meta$n_unique),
+                                  count = c(sum(saturation_counts$frequency),
+                                            sum(meta$n_unique),
                                             sum(filtered_meta$n_unique),
                                             sum(meta$n_unique) - sum(filtered_meta$n_unique)))
   fragment_qc_stats$millions <- round(fragment_qc_stats$count / 1e6, 2)
