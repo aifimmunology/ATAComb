@@ -144,12 +144,12 @@ if(!dir.exists(in_pre)) {
   stop()
 }
 if(!file.exists(in_sin)) {
-  stm(paste0("ERROR: Cannot find IN singlecell.csv:", in_sin))
+  stm(paste0("ERROR: Cannot find IN singlecell.csv or barcode_counts.csv:", in_sin))
   stop()
 }
 if(!file.exists(in_sum)) {
-  stm(paste0("ERROR: Cannot find IN summary.csv or barcode_counts.csv:", in_sum))
-  stop()
+  stm(paste0("WARNING: Cannot find IN summary.csv:", in_sum))
+  stm("WARNING: Some QC metrics will not be calculated")
 }
 if(!file.exists(in_key)) {
   stm(paste0("ERROR: Cannot find IN SampleSheet file:", in_key))
