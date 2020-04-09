@@ -6,7 +6,19 @@ Functions and Rmarkdowns for QC and analysis of scATAC-seq data.
 
 ## Requirements
 
-TBD
+```
+Depends:
+  GenomicRanges,
+  data.table,
+  Matrix
+Imports:
+  assertthat,
+  igraph,
+  IRanges,
+  Matrix,
+  parallel,
+  RANN
+```
 
 ## Installation
 

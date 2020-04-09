@@ -14,8 +14,8 @@ atac_lsi(atac_matrix, site_frequency_threshold = 0.03, seed = 3030)
 \item{seed}{A numeric value to use as a random seed. Default is 3030.}
 }
 \value{
-A VD matrix from singular value decomposition.
+A list with two objects: pcs, a VD matrix from singular value decomposition; and feature_loadings, a UD matrix from SVD.
 }
 \description{
-Perform Latent Semantic Indexing of a binary matrix
+This is a wrapper around two functions: atac_tf_idf() and atac_svd()
 }
