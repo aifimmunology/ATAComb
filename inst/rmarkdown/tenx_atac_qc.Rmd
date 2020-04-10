@@ -309,7 +309,7 @@ filtered_meta <- meta
 for(i in seq_along(cutoffs)) {
   cut_name <- names(cutoffs)[i]
   cut_val <- cutoffs[[i]]
-  filtered_meta <- filtered_meta[meta[[cut_name]] > cut_val]
+  filtered_meta <- filtered_meta[filtered_meta[[cut_name]] > cut_val]
 }
 ```
 
