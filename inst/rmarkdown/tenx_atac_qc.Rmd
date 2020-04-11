@@ -423,7 +423,7 @@ walk(seq_along(window_mat_files),
        window_mat_name <- window_mat_names[x]
        window_size <- window_sizes[x]
        
-       offsets <- window_offsets[[window_mat_name]]
+       window_offsets <- window_offsets[[window_mat_name]]
        window_meta <- window_metas[[window_mat_name]]
        
        stm(paste("Building",window_mat_name,"matrix"))
@@ -438,7 +438,7 @@ walk(seq_along(window_mat_files),
                                      "integer" = c(3,4)))
        
        dt <- dt[original_barcodes %in% filtered_meta$original_barcodes]
-       offsets <- offsets[,c("chr","offset")]
+       offsets <- window_offsets[,c("chr","offset")]
        
        dt <- dt[offsets, on = "chr"]
        dt$i <- dt$chr_i + dt$offset
@@ -452,7 +452,7 @@ walk(seq_along(window_mat_files),
                                          data = dt$x,
                                          indices = dt$i - 1,
                                          indptr = c(0, cumsum(barcode_counts)),
-                                         shape = c(sum(offsets$n_windows),
+                                         shape = c(sum(window_offsets$n_windows),
                                                    nrow(filtered_meta)),
                                          features = window_meta))
        rm(dt)
