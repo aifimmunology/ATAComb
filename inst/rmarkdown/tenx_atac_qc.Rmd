@@ -366,6 +366,7 @@ walk(seq_along(feature_mat_files),
        mat_list <- list(matrix = list(barcodes = new_barcodes,
                                       data = dt$x,
                                       indices = dt$i - 1,
+                                      indptr = c(0, cumsum(barcode_counts)),
                                       shape = c(n_features, nrow(filtered_meta)),
                                       features = reference_meta[[mat_name]]))
        rm(dt)
