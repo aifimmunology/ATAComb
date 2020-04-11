@@ -78,6 +78,10 @@ R.utils::gunzip("inst/reference/hg19ToHg38.over.chain.gz",
 
 ch_to_19 <- import.chain(temp_chain)
 
+temp_file <- tempfile(fileext = ".bed.gz")
+download.file("https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE123577&format=file&file=GSE123577%5Fpbmc%5Fpeaks%2Ebed%2Egz",
+              temp_file)
+
 hg19_peaks <- fread(temp_file)
 names(hg19_peaks) <- c("chr","start","end")
 hg19_gr <- convert_fragments_gr(list(hg19_peaks))[[1]]
