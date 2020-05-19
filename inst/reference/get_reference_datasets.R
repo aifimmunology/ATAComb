@@ -487,6 +487,7 @@ name_conversion <- c(B.Naive = "pre-B cell",
                      T.CD4.Memory = "CD4 Memory",
                      T.CD8.Effector = "CD8 effector",
                      T.DoubleNegative = "Double negative T cell",
+                     NK = "NK cell",
                      DC.Plasmacytoid = "pDC",
                      DC.Myeloid = "Dendritic cell",
                      Mono.CD14 = "CD14+ Monocytes",
@@ -501,6 +502,6 @@ pbmc_list <- list(matrix_dgCMatrix = pbmc_mat,
 
 pbmc_list <- h5_list_convert_from_dgCMatrix(pbmc_list, "matrix")
 
-write_h5_list(pbmc_list, "seurat_pbmc_ref.h5")
+write_h5_list(pbmc_list, "seurat_rna_pbmc_ref.h5")
 
 file.remove("pbmc_10k_v3.rds")
