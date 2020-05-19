@@ -116,8 +116,7 @@ if(!dir.exists(out_dir)) {
   stm(paste0("Creating Output Directory: ",out_dir))
   dir.create(out_dir, 
              recursive = TRUE)
-  dir.create(temp_dir,
-             recursive = TRUE)
+  dir.create(temp_dir)
 }
 ```
 
