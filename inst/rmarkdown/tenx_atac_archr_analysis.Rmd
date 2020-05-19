@@ -61,7 +61,7 @@ stm("Starting ArchR analysis")
 
 #### Argument parsing
 ```{r Parse arguments}
-if(is.null(params$frag)) {
+if(is.null(params$in_frag)) {
   in_frag <- system.file("testdata/outs/fragments.tsv.gz",
                          package = "ATAComb")
   in_sample <- "X000_PB000000"
