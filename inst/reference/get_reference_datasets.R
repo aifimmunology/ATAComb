@@ -463,13 +463,13 @@ pbmc_mat <- pbmc_mat[keep_genes,]
 
 pbmc_genes <- rownames(pbmc_mat)
 pbmc_ensembl <- tenx_genes$gene_id[match(pbmc_genes, tenx_genes$symbols)]
-rownames(pbmc_mat) <- pbmc_ensembl
+#rownames(pbmc_mat) <- pbmc_ensembl
 
 pbmc_meta <- pbmc_so@meta.data
-pbmc_meta$barcodes <- rownames(pbmc_meta)
+pbmc_meta$original_barcodes <- rownames(pbmc_meta)
 
 pbmc_meta <- pbmc_meta[pbmc_meta$celltype != "Platelets",]
-pbmc_mat <- pbmc_mat[,pbmc_meta$barcodes]
+pbmc_mat <- pbmc_mat[,pbmc_meta$original_barcodes]
 
 pbmc_meta <- lapply(pbmc_meta,
                     function(x) {
