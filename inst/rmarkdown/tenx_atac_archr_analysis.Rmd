@@ -127,8 +127,10 @@ if(!dir.exists(out_dir)) {
 
 #### Load reference dataset
 ```{r}
-seurat_reference <- system.file("reference/seurat_rna_pbmc_ref.h5",
+reference_source <- system.file("reference/seurat_rna_pbmc_ref.h5",
                                 package = "ATAComb")
+file.copy(reference_source, file.path(temp_dir,"seurat_pbmc_ref.h5"))
+seurat_reference <- file.path(temp_dir, "seurat_pbmc_ref.h5")
 rna_so <- H5weaver::read_h5_seurat(seurat_reference)
 ```
 
