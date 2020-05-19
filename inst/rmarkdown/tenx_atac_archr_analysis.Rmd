@@ -116,7 +116,6 @@ if(!dir.exists(out_dir)) {
   stm(paste0("Creating Output Directory: ",out_dir))
   dir.create(out_dir, 
              recursive = TRUE)
-  dir.create(temp_dir)
 }
 ```
 
@@ -128,9 +127,10 @@ if(!dir.exists(out_dir)) {
 ```{r}
 reference_source <- system.file("reference/seurat_rna_pbmc_ref.h5",
                                 package = "ATAComb")
-file.copy(reference_source, file.path(temp_dir,"seurat_pbmc_ref.h5"))
-seurat_reference <- file.path(temp_dir, "seurat_pbmc_ref.h5")
+file.copy(reference_source, file.path(out_dir,"seurat_pbmc_ref.h5"))
+seurat_reference <- file.path(out_dir, "seurat_pbmc_ref.h5")
 rna_so <- H5weaver::read_h5_seurat(seurat_reference)
+file.remove(seurat_reference)
 ```
 
 [Return to Contents](#contents)
