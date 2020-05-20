@@ -73,13 +73,17 @@ if(is.null(params$in_frag)) {
   in_sample <- params$in_sample
   genome <- params$genome
   out_dir <- params$out_dir
-  n_threads <- parallel::detectCores()
+  n_threads <- params$n_threads
 }
 
 # Check Genome
 if(!genome %in% c("hg38","hg19")) {
   stm(paste0("Genome must be 'hg38' or 'hg19'. Genome provided: ", genome))
   stop()
+}
+
+if(is.null(n_threads)) {
+  n_threads <- parallel::detectCores()
 }
 
 temp_dir <- file.path(out_dir, "temp")
