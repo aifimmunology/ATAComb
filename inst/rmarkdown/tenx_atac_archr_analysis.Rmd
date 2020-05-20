@@ -73,7 +73,7 @@ if(is.null(params$in_frag)) {
   in_sample <- params$in_sample
   genome <- params$genome
   out_dir <- params$out_dir
-  n_threads <- params$n_threads
+  n_threads <- as.numeric(params$n_threads)
 }
 
 # Check Genome
