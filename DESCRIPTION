@@ -15,6 +15,7 @@ Depends:
   rhdf5
 Imports:
   assertthat,
+  H5weaver (>= 1.0.14),
   igraph,
   IRanges,
   Matrix,

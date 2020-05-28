@@ -78,6 +78,10 @@ R.utils::gunzip("inst/reference/hg19ToHg38.over.chain.gz",
 
 ch_to_19 <- import.chain(temp_chain)
 
+temp_file <- tempfile(fileext = ".bed.gz")
+download.file("https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE123577&format=file&file=GSE123577%5Fpbmc%5Fpeaks%2Ebed%2Egz",
+              temp_file)
+
 hg19_peaks <- fread(temp_file)
 names(hg19_peaks) <- c("chr","start","end")
 hg19_gr <- convert_fragments_gr(list(hg19_peaks))[[1]]
@@ -166,8 +170,11 @@ fwrite(gene_bed,
 
 # TSS Regions
 tss_2kb_gr <- resize(gene_gr,
-                     width = 4e3,
+                     width = 2e3,
                      fix = "start")
+tss_2kb_gr <- resize(tss_2kb_gr,
+                     width = 4e3,
+                     fix = "end")
 
 tss_2kb_gr <- GenomicRanges::sort(tss_2kb_gr, ignore.strand = TRUE)
 
@@ -331,8 +338,11 @@ fwrite(gene_bed,
 
 # TSS Regions
 tss_2kb_gr <- resize(gene_gr,
-                     width = 4e3,
+                     width = 2e3,
                      fix = "start")
+tss_2kb_gr <- resize(tss_2kb_gr,
+                     width = 4e3,
+                     fix = "end")
 
 tss_2kb_gr <- GenomicRanges::sort(tss_2kb_gr, ignore.strand = TRUE)
 
@@ -436,3 +446,68 @@ fwrite(great_bed,
        quote = FALSE,
        col.names = FALSE,
        row.names = FALSE)
+
+
+### Seurat RNA-seq reference
+library(Seurat)
+library(H5weaver)
+
+tenx_genes <- fread("hg38_ensemble93_tenx_genes.tsv.gz")
+tenx_genes$symbols <- make.unique(tenx_genes$gene_name)
+
+if(!file.exists("pbmc_10k_v3.rds")) {
+  download.file("https://www.dropbox.com/s/3f3p5nxrn5b3y4y/pbmc_10k_v3.rds?dl=1",
+                "pbmc_10k_v3.rds")
+}
+
+pbmc_so <- readRDS("pbmc_10k_v3.rds")
+pbmc_mat <- pbmc_so@assays$RNA@counts
+
+pbmc_genes <- rownames(pbmc_mat)
+keep_genes <- pbmc_genes %in% tenx_genes$symbols
+pbmc_mat <- pbmc_mat[keep_genes,]
+
+pbmc_genes <- rownames(pbmc_mat)
+pbmc_ensembl <- tenx_genes$gene_id[match(pbmc_genes, tenx_genes$symbols)]
+#rownames(pbmc_mat) <- pbmc_ensembl
+
+pbmc_meta <- pbmc_so@meta.data
+pbmc_meta$original_barcodes <- rownames(pbmc_meta)
+
+pbmc_meta <- pbmc_meta[pbmc_meta$celltype != "Platelets",]
+pbmc_mat <- pbmc_mat[,pbmc_meta$original_barcodes]
+
+pbmc_meta <- lapply(pbmc_meta,
+                    function(x) {
+                      if(class(x) == "factor") {
+                        as.character(x)
+                      } else {
+                        x
+                      }
+                    })
+
+name_conversion <- c(B.Naive = "pre-B cell",
+                     B.Activated = "B cell progenitor",
+                     T.CD4.Naive = "CD4 Naive",
+                     T.CD8.Naive = "CD8 Naive",
+                     T.CD4.Memory = "CD4 Memory",
+                     T.CD8.Effector = "CD8 effector",
+                     T.DoubleNegative = "Double negative T cell",
+                     NK = "NK cell",
+                     DC.Plasmacytoid = "pDC",
+                     DC.Myeloid = "Dendritic cell",
+                     Mono.CD14 = "CD14+ Monocytes",
+                     Mono.CD16 = "CD16+ Monocytes")
+
+pbmc_meta$celltype <- names(name_conversion[match(pbmc_meta$celltype, name_conversion)])
+
+pbmc_list <- list(matrix_dgCMatrix = pbmc_mat,
+                  matrix = list(observations = pbmc_meta,
+                                features = list(name = pbmc_genes))
+                  )
+
+pbmc_list <- h5_list_convert_from_dgCMatrix(pbmc_list, "matrix")
+
+write_h5_list(pbmc_list, "seurat_rna_pbmc_ref.h5")
+
+file.remove("pbmc_10k_v3.rds")
