@@ -170,8 +170,11 @@ fwrite(gene_bed,
 
 # TSS Regions
 tss_2kb_gr <- resize(gene_gr,
-                     width = 4e3,
+                     width = 2e3,
                      fix = "start")
+tss_2kb_gr <- resize(tss_2kb_gr,
+                     width = 4e3,
+                     fix = "end")
 
 tss_2kb_gr <- GenomicRanges::sort(tss_2kb_gr, ignore.strand = TRUE)
 
@@ -335,8 +338,11 @@ fwrite(gene_bed,
 
 # TSS Regions
 tss_2kb_gr <- resize(gene_gr,
-                     width = 4e3,
+                     width = 2e3,
                      fix = "start")
+tss_2kb_gr <- resize(tss_2kb_gr,
+                     width = 4e3,
+                     fix = "end")
 
 tss_2kb_gr <- GenomicRanges::sort(tss_2kb_gr, ignore.strand = TRUE)
 
