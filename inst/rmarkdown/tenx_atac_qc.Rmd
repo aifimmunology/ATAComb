@@ -205,7 +205,7 @@ stm(paste(c("Available references:", reference_names), collapse = " "))
 
 reference_datasets <- map(reference_files,
                           readRDS)
-reference_datasets <- map(reference_datasets, as.data.frame)
+reference_datasets <- map(reference_datasets, GenomicRanges::as.data.frame)
 names(reference_datasets) <- reference_names
 
 reference_meta <- map(seq_along(reference_datasets),
