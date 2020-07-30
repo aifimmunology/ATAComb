@@ -205,7 +205,24 @@ stm(paste(c("Available references:", reference_names), collapse = " "))
 
 reference_datasets <- map(reference_files,
                           readRDS)
-reference_datasets <- map(reference_datasets, as.data.frame)
+
+gr_to_df <- function(gr) {
+  df <- data.frame(seqnames = seqnames(gr),
+                   start = start(gr),
+                   end = end(gr),
+                   strand = strand(gr))
+  
+  mc <- as.data.frame(mcols(gr)@listData)
+  
+  if(nrow(mc) == nrow(df)) {
+    cbind(df, mc)
+  } else {
+    df
+  }
+  
+}
+
+reference_datasets <- map(reference_datasets, gr_to_df)
 names(reference_datasets) <- reference_names
 
 reference_meta <- map(seq_along(reference_datasets),
