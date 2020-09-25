@@ -177,6 +177,8 @@ tss_2kb_gr <- resize(tss_2kb_gr,
                      fix = "end")
 
 tss_2kb_gr <- GenomicRanges::sort(tss_2kb_gr, ignore.strand = TRUE)
+# Rename S4Vectors DFrame to DataFrame for backwards compatibility
+class(tss_2kb_gr@elementMetadata) <- "DataFrame"
 
 saveRDS(tss_2kb_gr,
         "inst/reference/hg38_tss_gr.rds")
@@ -280,6 +282,7 @@ fwrite(great_bed,
        row.names = FALSE)
 
 ## Same process for hg19/GRCh37 build 87
+hg19_chrom_sizes <- read_chrom_sizes("hg19")
 
 gtf <- fread("C:/Users/lucasg/Downloads/Homo_sapiens.GRCh37.87.gtf.gz", skip = 5)
 names(gtf) <- c("seqname","source","feature","start","end","score","strand","frame","attribute")
@@ -324,6 +327,7 @@ gene_gr <- GRanges(seqnames = keep_gtf$seqname,
                    gene_id = keep_gtf$gene_id,
                    gene_name = keep_gtf$gene_name)
 gene_gr <- sort(gene_gr, ignore.strand = TRUE)
+class(gene_gr@elementMetadata) <- "DataFrame"
 
 saveRDS(gene_gr,
         "inst/reference/hg19_gene_bodies_gr.rds")
@@ -345,6 +349,8 @@ tss_2kb_gr <- resize(tss_2kb_gr,
                      fix = "end")
 
 tss_2kb_gr <- GenomicRanges::sort(tss_2kb_gr, ignore.strand = TRUE)
+# Rename S4Vectors DFrame to DataFrame for backwards compatibility
+class(tss_2kb_gr@elementMetadata) <- "DataFrame"
 
 saveRDS(tss_2kb_gr,
         "inst/reference/hg19_tss_gr.rds")
@@ -393,6 +399,7 @@ dn_regions$gene_id <- paste0(dn_regions$gene_id, "-dn")
 
 grr_gr <- c(up_regions, dn_regions)
 grr_gr <- sort(grr_gr, ignore.strand = TRUE)
+class(grr_gr@elementMetadata) <- "DataFrame"
 
 saveRDS(grr_gr,
         "inst/reference/hg19_grr_gr.rds")

@@ -223,6 +223,7 @@ gr_to_df <- function(gr) {
 }
 
 reference_datasets <- map(reference_datasets, gr_to_df)
+
 names(reference_datasets) <- reference_names
 
 reference_meta <- map(seq_along(reference_datasets),
