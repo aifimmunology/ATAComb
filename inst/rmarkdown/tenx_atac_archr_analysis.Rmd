@@ -199,14 +199,12 @@ if(n_cells < 200) {
   stm("WARNING: Too few cells for stand-alone label transfer")
   stm("WARNING: Will pad with additional cells")
   
-  padding_zip_file <- system.file("inst/testdata/Padding.arrow.gz", package = "ATAComb")
+  padding_zip_file <- system.file("testdata/Padding.arrow.gz", package = "ATAComb")
   file.copy(padding_zip_file, "./Padding.arrow.gz")
-  gunzip("Padding.arrow.gz")
+  system("gunzip Padding.arrow.gz")
   
   proj <- ArchRProject(ArrowFiles = c(arrowFiles, "Padding.arrow"),
                        outputDirectory = temp_dir)
-  
-  
 }
 ```
 
@@ -226,37 +224,6 @@ proj <- addIterativeLSI(ArchRProj = proj)
 proj <- addClusters(input = proj,
                     reducedDims = "IterativeLSI")
 ```
-
-
-#### Run Unconstrained transfer
-```{r}
-pad_ArchRProject <- function(proj,
-                             n_total = 200) {
-  n_cells <- length(proj$cellNames)
-  
-  n_need <- n_total - n_cells
-  padded_cellNames <- c(proj$cellNames, paste0("Padding",1:n_need,sep = "#"))
-  padded_Sample <- c(proj$Sample, rep("Padding", n_need))
-  
-  proj2 <- proj[c(1:n_cells, sample(1:n_cells, n_need, replace = TRUE)),]
-  proj2$cellNames <- padded_cellNames
-  proj2$Sample <- padded_Sample
-  proj2
-}
-
-unpad_ArchRProject <- function(proj) {
-  proj[proj$Sample != "Padding",]
-}
-```
-
-
-```{r}
-if(length(proj$cellNames) < 200) {
-  proj <- pad_ArchRProject(proj,
-                           n_total = 200)
-}
-```
-
 
 ```{r}
 outDir <- temp_dir
@@ -311,17 +278,43 @@ atac_cells <- lapply(atac_clusters,
                         proj$cellNames[proj$Clusters %in% x]
                     })
 
-groupList <- lapply(names(atac_cells),
-                   function(x) {
-                       SimpleList(ATAC = atac_cells[[x]],
-                                  RNA = rna_cells[[x]])
-                   })
-groupList <- SimpleList(groupList)
+# hold out ATAC cell sets with < 200 cells.
+# prevents a Seurat crash
+atac_cell_counts <- unlist(lapply(atac_cells, length))
+
+run_co <- TRUE
+if(all(atac_cell_counts < 200)) {
+  stm("All subsets too small to run contrained integration")
+  stm("Results will be based on unconstrained integration.")
+  run_co <- FALSE
+} else if(any(atac_cell_counts < 200)) {
+  small_logi <- atac_cell_counts < 200
+  small_names <- names(atac_cell_counts)[small_logi]
+  stm(paste(paste(small_names, collapse = " "),
+            "subset(s) too small to run contrained integration"))
+  stm("Some results will be based on unconstrained integration.")
+  
+  atac_cell_holdout <- atac_cells[small_logi]
+  atac_cells <- atac_cells[!small_logi]
+  rna_cells <- atac_cells[!small_logi]
+
+}
+
+if(run_co) {
+  groupList <- lapply(names(atac_cells),
+                      function(x) {
+                        SimpleList(ATAC = atac_cells[[x]],
+                                   RNA = rna_cells[[x]])
+                      })
+  groupList <- SimpleList(groupList)
+}
+
 ```
 
 #### Constrained integration
 ```{r}
-proj <- addGeneIntegrationMatrix(ArchRProj = proj,
+if(run_co) {
+  proj <- addGeneIntegrationMatrix(ArchRProj = proj,
                                  useMatrix = "GeneScoreMatrix",
                                  matrixName = "GeneIntegrationMatrix",
                                  reducedDims = "IterativeLSI",
@@ -332,7 +325,12 @@ proj <- addGeneIntegrationMatrix(ArchRProj = proj,
                                  nameGroup = "co_pred_group",
                                  nameScore = "co_pred_score",
                                  force = TRUE
-)
+  )
+} else {
+  proj$co_pred_group <- proj$un_pred_group
+  proj$co_pred_score <- proj$un_pred_score
+  proj$co_pred_type <- proj$un_pred_type
+}
 ```
 
 #### Constrained confusion matrix
