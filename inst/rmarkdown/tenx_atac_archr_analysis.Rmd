@@ -146,7 +146,7 @@ file.remove(seurat_reference)
 stm("Setting ArchR parameters")
 set.seed(3030)
 
-addArchRThreads(n_threads)
+addArchRThreads(n_threads, force = TRUE)
 addArchRGenome(genome)
 ```
 
@@ -282,25 +282,17 @@ atac_cells <- lapply(atac_clusters,
 # prevents a Seurat crash
 atac_cell_counts <- unlist(lapply(atac_cells, length))
 
-run_co <- TRUE
-if(all(atac_cell_counts < 200)) {
+if(any(atac_cell_counts < 200)) {
+  small_logi <- atac_cell_counts < 200
+  small_names <- names(atac_cell_counts)[small_logi]
+  
+  stm(paste(paste(small_names, collapse = " "),
+            "subset(s) too small to run contrained integration"))
+  
   stm("All subsets too small to run contrained integration")
   stm("Results will be based on unconstrained integration.")
   run_co <- FALSE
-} else if(any(atac_cell_counts < 200)) {
-  small_logi <- atac_cell_counts < 200
-  small_names <- names(atac_cell_counts)[small_logi]
-  stm(paste(paste(small_names, collapse = " "),
-            "subset(s) too small to run contrained integration"))
-  stm("Some results will be based on unconstrained integration.")
-  
-  atac_cell_holdout <- atac_cells[small_logi]
-  atac_cells <- atac_cells[!small_logi]
-  rna_cells <- atac_cells[!small_logi]
-
-}
-
-if(run_co) {
+} else {
   groupList <- lapply(names(atac_cells),
                       function(x) {
                         SimpleList(ATAC = atac_cells[[x]],
