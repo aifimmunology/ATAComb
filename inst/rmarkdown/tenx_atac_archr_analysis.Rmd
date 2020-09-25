@@ -193,6 +193,7 @@ proj <- filterDoublets(ArchRProj = proj,
 ```
 
 ```{r}
+cell_padding <- FALSE
 n_cells <- length(getCellNames(proj))
 
 if(n_cells < 200) {
@@ -205,6 +206,8 @@ if(n_cells < 200) {
   
   proj <- ArchRProject(ArrowFiles = c(arrowFiles, "Padding.arrow"),
                        outputDirectory = temp_dir)
+  
+  cell_padding <- TRUE
 }
 ```
 
@@ -239,6 +242,29 @@ proj <- addGeneIntegrationMatrix(ArchRProj = proj,
                                  force = TRUE
 )
 ```
+
+```{r}
+if(cell_padding) {
+  cell_names <- getCellNames(proj)
+  padding_cells <- grepl("^Padding#",cell_names)
+  
+  un_pred_group <- proj$un_pred_group[!padding_cells]
+  un_pred_score <- proj$un_pred_score[!padding_cells]
+  un_pred_type <- proj$un_pred_type[!padding_cells]
+  Clusters <- proj$Clusters[!padding_cells]
+  
+  orig_cells <- cell_names[!padding_cells]
+  
+  proj <- ArchRProject(ArrowFiles = arrowFiles[1],
+                       outputDirectory = temp_dir)
+  
+  proj <- addCellColData(proj, data = un_pred_group, name = "un_pred_group", cells = orig_cells)
+  proj <- addCellColData(proj, data = un_pred_score, name = "un_pred_score", cells = orig_cells)
+  proj <- addCellColData(proj, data = un_pred_type, name = "un_pred_type", cells = orig_cells)
+  proj <- addCellColData(proj, data = Clusters, name = "Clusters", cells = orig_cells)
+}
+```
+
 
 #### Unconstrained confusion matrix
 ```{r}
