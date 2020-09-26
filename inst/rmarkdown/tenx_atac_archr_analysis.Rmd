@@ -325,6 +325,7 @@ if(any(atac_cell_counts < 200)) {
                                    RNA = rna_cells[[x]])
                       })
   groupList <- SimpleList(groupList)
+  run_co <- TRUE
 }
 
 ```
