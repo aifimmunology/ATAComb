@@ -15,6 +15,8 @@ params:
   in_key: NULL
   in_well: NULL
   genome: NULL
+  refs: NULL
+  window_sizes: NULL
   out_dir: NULL
 ---
 
@@ -89,6 +91,8 @@ if(is.null(params$in_pre)) {
   in_key <- system.file("testdata/test_SampleSheet.csv", package = "ATAComb")
   in_well <- "B000-AP0C1W1"
   genome <- "hg38"
+  refs <- "all"
+  window_sizes <- "all"
   out_dir <- tempdir()
 } else {
   in_pre <- params$in_pre
@@ -97,6 +101,8 @@ if(is.null(params$in_pre)) {
   in_key <- params$in_key
   in_well <- params$in_well
   genome <- params$genome
+  refs <- params$refs
+  window_sizes <- params$window_sizes
   out_dir <- params$out_dir
 }
 
@@ -115,12 +121,22 @@ if(!genome %in% c("hg38","hg19")) {
   stop()
 }
 
+if(is.null(refs)) {
+  refs <- "all"
+}
+
+if(is.null(window_sizes)) {
+  window_sizes <- "all"
+}
+
 stm(paste0("IN  preprocessed dir : ", in_pre))
 stm(paste0("IN  singlecell.csv   : ", in_sin))
 stm(paste0("IN  summary.csv      : ", in_sum))
 stm(paste0("IN  SampleSheet      : ", in_key))
 stm(paste0("IN  Well ID          : ", in_well))
 stm(paste0("IN  Genome           : ", genome))
+stm(paste0("IN  References       : ", refs))
+stm(paste0("IN  Window Sizes     : ", window_sizes))
 stm(paste0("OUT Directory        : ", out_dir))
 ```
 
@@ -133,6 +149,8 @@ print(c(
   paste0("IN  SampleSheet      : ", in_key),
   paste0("IN  Well ID          : ", in_well),
   paste0("IN  Genome           : ", genome),
+  paste0("IN  References       : ", refs),
+  paste0("IN  Window Sizes     : ", window_sizes),
   paste0("OUT H5 directory     : ", out_dir)
 ))
 ```
@@ -156,6 +174,100 @@ if(!file.exists(in_key)) {
   stop()
 }
 in_prefix <- file.path(in_pre, in_well)
+```
+
+#### Check reference overlap files
+```{r}
+reference_files <- list.files(system.file("reference", package = "ATAComb"), 
+                              pattern = paste0(genome, ".+gr.rds"),
+                              full.names = TRUE)
+reference_names <- sub(paste0(".+",genome,"_"),"",reference_files)
+reference_names <- sub("_gr.rds","",reference_names)
+
+stm(paste(c("Available references:", reference_names), collapse = " "))
+
+feature_mat_files <- list.files(in_pre, pattern = "sparse_matrix.tsv.gz", full.names = TRUE)
+feature_mat_names <- sub(paste0(in_prefix,"_"), "", feature_mat_files)
+feature_mat_names <- sub("_sparse_matrix.tsv.gz","",feature_mat_names)
+stm(paste(c("Available reference matrices:", feature_mat_names), collapse = " "))
+
+matching_refs <- intersect(reference_names, feature_mat_names)
+stm(paste(c("Matching reference matrices:", matching_refs), collapse = " "))
+
+if(length(matching_refs) == 0) {
+  stop("Computed reference matrices do not match available references")
+} else {
+  reference_files <- reference_files[match(matching_refs, reference_names)]
+  reference_names <- matching_refs
+  feature_mat_files <- feature_mat_files[match(matching_refs, feature_mat_names)]
+  feature_mat_names <- matching_refs
+}
+
+if(refs == "all") {
+  stm("Using all matching references")
+} else {
+  split_refs <- unlist(strsplit(refs, split = ","))
+  
+  # Check for matching references
+  good_refs <- intersect(split_refs, reference_names)
+  
+  # Stop if no matches
+  if(length(good_refs) == 0) {
+    stop(paste("No references match", refs))
+  }
+  
+  combined_good_refs <- paste(good_refs, collapse = " ")
+  stm(paste0("Selected references: ", combined_good_refs))
+  
+  reference_files <- reference_files[match(good_refs, reference_names)]
+  reference_names <- good_refs
+
+  feature_mat_files <- feature_mat_files[match(good_refs, feature_mat_names)]
+  feature_mat_names <- good_refs
+
+  # Warn about mismatches
+  bad_refs <- setdiff(split_refs, reference_names)
+  if(length(bad_refs) > 0) {
+    bad_refs <- paste(bad_refs, collapse = ",")
+    stm(paste0("WARNING: Reference input(s) ",bad_refs," do not match available references. Skipping."))
+  }
+}
+```
+
+#### Check window sizes
+```{r}
+window_mat_files <- list.files(in_pre, pattern = "window.+counts.tsv.gz", full.names = TRUE)
+window_mat_names <- sub(paste0(in_prefix,"_"), "", window_mat_files)
+window_mat_names <- sub("_counts.tsv.gz","",window_mat_names)
+stm(paste(c("Available window matrices:", window_mat_names), collapse = " "))
+
+if(window_sizes == "all") {
+  stm("Using all Available window matrices")
+  use_windows <- window_mat_names
+} else {
+  split_windows <- unlist(strsplit(window_sizes, split = ","))
+
+  # Check for matching references
+  good_windows <- intersect(split_windows, window_mat_names)
+  
+  # Stop if no matches
+  if(length(good_refs) == 0) {
+    stop(paste("No window matrices match", window_sizes))
+  }
+  
+  combined_good_windows <- paste(good_windows, collapse = " ")
+  stm(paste0("Selected window matrices: ", good_windows))
+  
+  window_mat_names <- good_windows
+  window_mat_files <- window_mat_files[match(good_windows, window_mat_names)]
+  
+  # Warn about mismatches
+  bad_windows <- setdiff(split_windows, window_mat_names)
+  if(length(bad_windows) > 0) {
+    bad_windows <- paste(bad_windows, collapse = ",")
+    stm(paste0("WARNING: Window input(s) ",bad_windows," do not match available matrices. Skipping."))
+  }
+}
 ```
 
 #### Create out directory if missing
@@ -195,13 +307,6 @@ walk(seq_along(cutoffs),
 #### Load Reference Datasets
 ```{r Load references}
 stm(paste("Loading reference region sets for", genome))
-reference_files <- list.files(system.file("reference", package = "ATAComb"), 
-                              pattern = paste0(genome, ".+gr.rds"),
-                              full.names = TRUE)
-reference_names <- sub(paste0(".+",genome,"_"),"",reference_files)
-reference_names <- sub("_gr.rds","",reference_names)
-
-stm(paste(c("Available references:", reference_names), collapse = " "))
 
 reference_datasets <- map(reference_files,
                           readRDS)
@@ -348,18 +453,12 @@ fwrite(filtered_meta, filtered_meta_out)
 
 ## Build Feature Matrices
 
-#### Find available matrices
-```{r}
-stm("Building feature matrices")
-feature_mat_files <- list.files(in_pre, pattern = "sparse_matrix.tsv.gz", full.names = TRUE)
-feature_mat_names <- sub(paste0(in_prefix,"_"), "", feature_mat_files)
-feature_mat_names <- sub("_sparse_matrix.tsv.gz","",feature_mat_names)
-stm(paste(c("Available matrices:", feature_mat_names), collapse = " "))
-```
-
-
 #### Read overlaps and output results
 ```{r Region Matrices}
+stm("Building reference matrices")
+
+obs_list <- as.list(filtered_meta[,names(filtered_meta) != "barcodes"])
+
 walk(seq_along(feature_mat_files),
      function(x) {
        mat_file <- feature_mat_files[x]
@@ -386,13 +485,17 @@ walk(seq_along(feature_mat_files),
                                       indices = dt$i - 1,
                                       indptr = c(0, cumsum(barcode_counts)),
                                       shape = c(n_features, nrow(filtered_meta)),
-                                      features = reference_meta[[mat_name]]))
+                                      features = reference_meta[[mat_name]],
+                                      observations = obs_list))
        rm(dt)
        
        out_file <- paste0(out_prefix, mat_name, ".h5")
        stm(paste("Writing .h5 file to:", out_file))
        write_h5_list(mat_list,
-                     out_file)
+                     out_file,
+                     overwrite = TRUE)
+       
+       rm(mat_list)
      })
 ```
 
@@ -401,11 +504,6 @@ walk(seq_along(feature_mat_files),
 ### Window count matrices
 ```{r}
 stm("Building window matrices")
-window_mat_files <- list.files(in_pre, pattern = "window.+counts.tsv.gz", full.names = TRUE)
-window_mat_names <- sub(paste0(in_prefix,"_"), "", window_mat_files)
-window_mat_names <- sub("_counts.tsv.gz","",window_mat_names)
-stm(paste(c("Available matrices:", window_mat_names), collapse = " "))
-
 window_sizes <- as.numeric(sub("window_([0-9]+)k","\\1",window_mat_names)) * 1000
 
 window_offsets <- map(window_sizes,
@@ -472,7 +570,8 @@ walk(seq_along(window_mat_files),
                                          indptr = c(0, cumsum(barcode_counts)),
                                          shape = c(sum(window_offsets$n_windows),
                                                    nrow(filtered_meta)),
-                                         features = window_meta))
+                                         features = window_meta,
+                                         observations = obs_list))
        rm(dt)
        
        window_list$matrix$observations <- as.list(filtered_meta)
@@ -481,6 +580,8 @@ walk(seq_along(window_mat_files),
        stm(paste("Writing .h5 file to:", out_file))
        write_h5_list(window_list,
                      out_file)
+       
+       rm(window_list)
      })
 ```
 
