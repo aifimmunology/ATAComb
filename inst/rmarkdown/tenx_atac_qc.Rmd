@@ -199,7 +199,7 @@ if(length(matching_refs) == 0) {
 } else {
   reference_files <- reference_files[match(matching_refs, reference_names)]
   reference_names <- matching_refs
-  feature_mat_files <- reference_files[match(matching_refs, feature_mat_names)]
+  feature_mat_files <- feature_mat_files[match(matching_refs, feature_mat_names)]
   feature_mat_names <- matching_refs
 }
 
@@ -219,9 +219,12 @@ if(refs == "all") {
   combined_good_refs <- paste(good_refs, collapse = " ")
   stm(paste0("Selected references: ", combined_good_refs))
   
-  reference_names <- good_refs
   reference_files <- reference_files[match(good_refs, reference_names)]
-  
+  reference_names <- good_refs
+
+  feature_mat_files <- feature_mat_files[match(good_refs, feature_mat_names)]
+  feature_mat_names <- good_refs
+
   # Warn about mismatches
   bad_refs <- setdiff(split_refs, reference_names)
   if(length(bad_refs) > 0) {
@@ -489,7 +492,8 @@ walk(seq_along(feature_mat_files),
        out_file <- paste0(out_prefix, mat_name, ".h5")
        stm(paste("Writing .h5 file to:", out_file))
        write_h5_list(mat_list,
-                     out_file)
+                     out_file,
+                     overwrite = TRUE)
      })
 ```
 
@@ -564,7 +568,8 @@ walk(seq_along(window_mat_files),
                                          indptr = c(0, cumsum(barcode_counts)),
                                          shape = c(sum(window_offsets$n_windows),
                                                    nrow(filtered_meta)),
-                                         features = window_meta))
+                                         features = window_meta,
+                                         observations = obs_list))
        rm(dt)
        
        window_list$matrix$observations <- as.list(filtered_meta)
