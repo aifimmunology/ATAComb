@@ -494,6 +494,8 @@ walk(seq_along(feature_mat_files),
        write_h5_list(mat_list,
                      out_file,
                      overwrite = TRUE)
+       
+       rm(mat_list)
      })
 ```
 
@@ -578,6 +580,8 @@ walk(seq_along(window_mat_files),
        stm(paste("Writing .h5 file to:", out_file))
        write_h5_list(window_list,
                      out_file)
+       
+       rm(window_list)
      })
 ```
 
