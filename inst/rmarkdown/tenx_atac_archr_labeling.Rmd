@@ -175,11 +175,16 @@ if(n_cells < 200) {
   stm("WARNING: Too few cells for stand-alone label transfer")
   stm("WARNING: Will pad with additional cells")
   
-  padding_zip_file <- system.file("testdata/Padding.arrow.gz", package = "ATAComb")
-  file.copy(padding_zip_file, "./Padding.arrow.gz")
-  system("gunzip Padding.arrow.gz")
+  padding_source <- system.file("testdata/Padding.arrow.gz", package = "ATAComb")
+  padding_gz <- file.path(temp_dir, "Padding.arrow.gz")
   
-  proj <- ArchRProject(ArrowFiles = c(arrowFiles, "Padding.arrow"),
+  file.copy(padding_source, padding_gz)
+  
+  system(paste("gunzip", padding_gz))
+  
+  padding_file <- sub(".gz$","",padding_gz)
+  
+  proj <- ArchRProject(ArrowFiles = c(in_arrow, padding_file),
                        outputDirectory = temp_dir)
   
   cell_padding <- TRUE
@@ -204,8 +209,9 @@ proj <- addClusters(input = proj,
 ```
 
 ```{r}
-proj <- addUMAP(input = proj,
+proj <- addUMAP(ArchRProj = proj,
                 reducedDims = "IterativeLSI")
+umap_dims <- as.data.frame(getEmbedding(proj, "UMAP", returnDF = TRUE))
 ```
 
 ```{r}
@@ -235,7 +241,7 @@ if(cell_padding) {
   
   orig_cells <- cell_names[!padding_cells]
   
-  proj <- ArchRProject(ArrowFiles = arrowFiles[1],
+  proj <- ArchRProject(ArrowFiles = in_arrow,
                        outputDirectory = temp_dir)
   
   proj <- addCellColData(proj, data = un_pred_group, name = "un_pred_group", cells = orig_cells)
@@ -325,10 +331,12 @@ if(run_co) {
                                  nameScore = "co_pred_score",
                                  force = TRUE
   )
+  constrained_integration <- TRUE
 } else {
   proj$co_pred_group <- proj$un_pred_group
   proj$co_pred_score <- proj$un_pred_score
   proj$co_pred_type <- proj$un_pred_type
+  constrained_integration <- FALSE
 }
 ```
 
@@ -384,16 +392,42 @@ file.remove(temp_arrows)
 <a id="json_out"></a>
 
 ### Write QC JSON
+```{r}
+out_json <- file.path(out_dir,
+                      paste0(in_sample, "_labeling_summary.json"))
+
+type_table <- as.data.frame(table(results$seurat_pbmc_type))
+names(type_table) <- c("seurat_pbmc_type","n_cells")
+type_table$seurat_pbmc_type <- as.character(type_table$seurat_pbmc_type)
+type_table$frac_cells <- type_table$n_cells / sum(type_table$n_cells)
+
+qc_list <- list(report_type = "atac_labeling_v1",
+                report_datetime = as.character(start_time),
+                report_uuid = ids::uuid(use_time = TRUE),
+                package = "ATAComb",
+                package_version = sessionInfo()$otherPkgs$ATAComb$Version,
+                sample_id = in_well,
+                label_transfer_settings = list(
+                  genome = genome,
+                  reference_file = reference_source,
+                  unconstrained_integration_padding = cell_padding,
+                  constrained_integration = constrained_integration
+                ),
+                cell_type_summary = as.list(type_table)
+                )
+```
+
+
 
 ```{r Save QC JSON}
-stm(paste0("No JSON output yet"))
-# 
-# qc_list_json <- jsonlite::toJSON(qc_list,
-#                                  auto_unbox = TRUE,
-#                                  pretty = TRUE)
-# 
-# writeLines(qc_list_json,
-#            out_json)
+stm(paste0("Writing JSON to",out_json))
+
+qc_list_json <- jsonlite::toJSON(qc_list,
+                                 auto_unbox = TRUE,
+                                 pretty = TRUE)
+
+writeLines(qc_list_json,
+           out_json)
 ```
 
 [Return to Contents](#contents)
@@ -415,7 +449,7 @@ time_message <- paste0("Elapsed Time: ",
                        " ", units(diff_time))
 print(time_message)
 stm(time_message)
-stm("ArchR analysis process complete.")
+stm("10x ATAC ArchR labeling process complete.")
 ```
 
 [Return to Contents](#contents)
