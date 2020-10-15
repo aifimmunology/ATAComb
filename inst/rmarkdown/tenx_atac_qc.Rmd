@@ -734,8 +734,12 @@ out_json <- paste0(out_prefix, "atac_qc_metrics.json")
 #### Barcode QC Stats
 ```{r}
 barcode_conditions <- list("all" = rep(TRUE, nrow(meta)),
-                           "singlets" = rep(TRUE, n_post_doublet_filter),
-                           "doublets" = rep(TRUE, n_doublets),
+                           "singlets" = ifelse(n_post_doublet_filter > 0,
+                                               rep(TRUE, n_post_doublet_filter),
+                                               FALSE),
+                           "doublets" = ifelse(n_doublets > 0, 
+                                               rep(TRUE, n_doublets), 
+                                               FALSE),
                            "pass_qc" = meta$altius_frac > cutoffs$altius_frac & meta$peaks_frac > cutoffs$peaks_frac & meta$tss_frac > cutoffs$tss_frac,
                            "fail_qc" = meta$altius_frac < cutoffs$altius_frac | meta$peaks_frac < cutoffs$peaks_frac | meta$tss_frac < cutoffs$tss_frac,
                            "fail_altius_frac" = meta$altius_frac < cutoffs$altius_frac,
