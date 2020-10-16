@@ -112,7 +112,7 @@ print(c(
 
 #### Check Input Files
 ```{r Check Inputs}
-if(!file.exists(in_frag)) {
+if(!file.exists(in_arrow)) {
   stm(paste0("ERROR: Cannot find IN .arrow :", in_arrow))
   stop()
 }
