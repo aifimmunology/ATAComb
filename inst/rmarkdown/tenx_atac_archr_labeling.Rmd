@@ -415,7 +415,7 @@ qc_list <- list(report_type = "atac_labeling_v1",
                 report_uuid = ids::uuid(use_time = TRUE),
                 package = "ATAComb",
                 package_version = sessionInfo()$otherPkgs$ATAComb$Version,
-                sample_id = in_well,
+                sample_id = in_sample,
                 label_transfer_settings = list(
                   genome = genome,
                   reference_file = reference_source,
@@ -425,8 +425,6 @@ qc_list <- list(report_type = "atac_labeling_v1",
                 cell_type_summary = as.list(type_table)
                 )
 ```
-
-
 
 ```{r Save QC JSON}
 stm(paste0("Writing JSON to",out_json))
