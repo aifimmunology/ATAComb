@@ -200,21 +200,25 @@ if(n_cells < 200) {
 
 #### Reduce ATAC dims with LSI and add clusters
 ```{r}
+stm("ArchR: Adding IterativeLSI")
 proj <- addIterativeLSI(ArchRProj = proj)
 ```
 
 ```{r}
+stm("ArchR: Adding Clusters")
 proj <- addClusters(input = proj,
                     reducedDims = "IterativeLSI")
 ```
 
 ```{r}
+stm("ArchR: Adding UMAP")
 proj <- addUMAP(ArchRProj = proj,
                 reducedDims = "IterativeLSI")
 umap_dims <- as.data.frame(getEmbedding(proj, "UMAP", returnDF = TRUE))
 ```
 
 ```{r}
+stm("ArchR: Running Unconstrained Integration")
 outDir <- temp_dir
 proj <- addGeneIntegrationMatrix(ArchRProj = proj,
                                  useMatrix = "GeneScoreMatrix",
@@ -319,6 +323,8 @@ if(any(atac_cell_counts < 200)) {
 #### Constrained integration
 ```{r}
 if(run_co) {
+  stm("ArchR: Running Constrained Integration")
+  
   proj <- addGeneIntegrationMatrix(ArchRProj = proj,
                                  useMatrix = "GeneScoreMatrix",
                                  matrixName = "GeneIntegrationMatrix",
@@ -376,6 +382,9 @@ results <- data.frame(barcodes = sub(".+#","",rownames(proj@cellColData)),
 
 out_table_path <- file.path(out_dir,
                             paste0(in_sample, "_labeling_results.csv.gz"))
+
+stm(paste0("Writing cell labels to ", out_table_path))
+
 fwrite(results,
        out_table_path)
 ```
