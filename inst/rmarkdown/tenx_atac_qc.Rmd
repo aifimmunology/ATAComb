@@ -10,8 +10,7 @@ output:
     self_contained: true
 params:
   in_pre: NULL
-  in_sin: NULL
-  in_sum: NULL
+  in_tenx: NULL
   in_key: NULL
   in_well: NULL
   genome: NULL
@@ -28,6 +27,8 @@ params:
 - [Session Preparation](#session_preparation)
 - [Load References](#load_refs)
 - [Assemble Metadata](#assemble_meta)
+- [ArchR QC Analysis](#archr)
+- [Output metadata](#meta_out)
 - [Generate Matrices](#mats)
 
 #### [QC Metrics](#qc_stats)
@@ -86,8 +87,8 @@ stm("Starting scATAC-seq preprocessing")
 ```{r Parse arguments}
 if(is.null(params$in_pre)) {
   in_pre <- system.file("testdata/preprocessed", package = "ATAComb")
-  in_sin <- system.file("testdata/outs/singlecell.csv", package = "ATAComb")
-  in_sum <- system.file("testdata/outs/summary.csv", package = "ATAComb")
+  in_tenx <- system.file("testdata/outs", package = "ATAComb")
+  in_sum <- system.file("testdata/outs", package = "ATAComb")
   in_key <- system.file("testdata/test_SampleSheet.csv", package = "ATAComb")
   in_well <- "B000-AP0C1W1"
   genome <- "hg38"
@@ -96,8 +97,7 @@ if(is.null(params$in_pre)) {
   out_dir <- tempdir()
 } else {
   in_pre <- params$in_pre
-  in_sin <- params$in_sin
-  in_sum <- params$in_sum
+  in_tenx <- params$in_tenx
   in_key <- params$in_key
   in_well <- params$in_well
   genome <- params$genome
@@ -130,8 +130,7 @@ if(is.null(window_sizes)) {
 }
 
 stm(paste0("IN  preprocessed dir : ", in_pre))
-stm(paste0("IN  singlecell.csv   : ", in_sin))
-stm(paste0("IN  summary.csv      : ", in_sum))
+stm(paste0("IN  10x outputs      : ", in_tenx))
 stm(paste0("IN  SampleSheet      : ", in_key))
 stm(paste0("IN  Well ID          : ", in_well))
 stm(paste0("IN  Genome           : ", genome))
@@ -144,8 +143,7 @@ stm(paste0("OUT Directory        : ", out_dir))
 ```{r Print Arguments}
 print(c(
   paste0("IN  preprocessed dir : ", in_pre),
-  paste0("IN  singlecell.csv   : ", in_sin),
-  paste0("IN  summary.csv      : ", in_sum),
+  paste0("IN  10x outputs      : ", in_tenx),
   paste0("IN  SampleSheet      : ", in_key),
   paste0("IN  Well ID          : ", in_well),
   paste0("IN  Genome           : ", genome),
@@ -155,20 +153,46 @@ print(c(
 ))
 ```
 
+#### Set ArchR parameters
+```{r setup archr}
+quiet_library(ArchR)
+
+stm("Setting ArchR parameters")
+set.seed(3030)
+
+addArchRThreads(parallel::detectCores(), force = TRUE)
+addArchRGenome(genome)
+```
+
 #### Check Input Files
 ```{r Check Inputs}
 if(!dir.exists(in_pre)) {
   stm(paste0("ERROR: Cannot find IN preprocessed dir:", in_pre))
   stop()
 }
-if(!file.exists(in_sin)) {
-  stm(paste0("ERROR: Cannot find IN singlecell.csv or barcode_counts.tsv:", in_sin))
+if(!dir.exists(in_tenx)) {
+  stm(paste0("ERROR: Cannot find IN 10x outputs:", in_tenx))
   stop()
+} else {
+  in_sin <- file.path(in_tenx, "singlecell.csv")
+  if(!file.exists(in_sin)) {
+    stm(paste0("ERROR: Cannot find 10x summary.csv:", in_sin))
+    stop()
+  }
+  
+  in_sum <- file.path(in_tenx, "summary.csv")
+  if(!file.exists(in_sum)) {
+    stm(paste0("WARNING: Cannot find IN summary.csv:", in_sum))
+    stm("WARNING: Some QC metrics will not be calculated")
+  }
+  
+  in_frag <- file.path(in_tenx, "fragments.tsv.gz")
+  if(!file.exists(in_frag)) {
+    stm(paste0("ERROR: Cannot find 10x fragments.tsv.gz:", in_tenx))
+    stop()
+  }
 }
-if(!file.exists(in_sum)) {
-  stm(paste0("WARNING: Cannot find IN summary.csv:", in_sum))
-  stm("WARNING: Some QC metrics will not be calculated")
-}
+
 if(!file.exists(in_key)) {
   stm(paste0("ERROR: Cannot find IN SampleSheet file:", in_key))
   stop()
@@ -436,6 +460,107 @@ for(i in seq_along(cutoffs)) {
 }
 ```
 
+[Return to Contents](#contents)
+
+<a id="archr"></a>
+
+### ArchR QC analysis
+
+#### Create Arrow file
+```{r}
+stm(paste0("ArchR: Building ArrowFile from ",in_frag))
+valid_barcodes <- list(bcs = filtered_meta$original_barcodes)
+names(valid_barcodes) <- in_sample
+valid_barcodes <- SimpleList(valid_barcodes)
+
+temp_archr_dir <- paste0("archr_temp",ids::uuid())
+
+ArrowFile <- createArrowFiles(inputFiles = in_frag,
+                              sampleNames = in_sample,
+                              validBarcodes = valid_barcodes,
+                              filterFrags = 500,
+                              filterTSS = 0,
+                              maxFrags = 1e6,
+                              QCDir = temp_archr_dir)
+
+```
+
+#### Score and filter doublets
+```{r}
+stm("ArchR: Scoring and filtering doublets")
+doublet_scores <- addDoubletScores(input = ArrowFile,
+                                   outDir = temp_archr_dir,
+                                   force = TRUE)
+
+proj <- ArchRProject(ArrowFiles = ArrowFile,
+                     outputDirectory = temp_archr_dir,
+                     copyArrows = TRUE)
+
+archr_names <- getCellNames(proj)
+archr_names <- sub(".+#","",archr_names)
+new_barcodes <- meta$barcodes[match(archr_names, meta$original_barcodes)]
+rownames(proj@cellColData) <-new_barcodes
+
+proj <- filterDoublets(proj)
+
+filtered_barcodes <- getCellNames(proj)
+archr_meta <- getCellColData(proj)
+
+n_pre_doublet_filter <- nrow(filtered_meta)
+
+filtered_meta <- filtered_meta %>%
+  dplyr::filter(barcodes %in% filtered_barcodes)
+
+n_post_doublet_filter <- nrow(filtered_meta)
+n_doublets <- n_post_doublet_filter - n_pre_doublet_filter
+
+filtered_meta <- filtered_meta[match(filtered_meta$barcodes, filtered_barcodes),]
+
+filtered_meta$DoubletScore <- archr_meta[["DoubletScore"]]
+filtered_meta$DoubletEnrichment <- archr_meta[["DoubletEnrichment"]]
+filtered_meta$TSSEnrichment <- archr_meta[["TSSEnrichment"]]
+```
+
+#### Add additional metadata to archr project
+```{r}
+stm("ArchR: Merging metadata")
+
+additional_meta <- setdiff(names(filtered_meta), names(archr_meta))
+for(meta_col in additional_meta) {
+  proj <- addCellColData(proj,
+                         data = filtered_meta[[meta_col]],
+                         name = meta_col,
+                         cells = filtered_meta$barcodes)
+}
+```
+
+#### Save Archr project and shift arrow to output directory
+```{r}
+proj <- saveArchRProject(proj)
+
+ArrowFile <- getArrowFiles(proj)
+
+file.rename(ArrowFile, paste0(out_prefix, "archr.arrow"))
+```
+
+#### Clean up ArchR files
+```{r}
+stm("ArchR: Cleaning up temporary files")
+
+system("rm -r ./tmp/")
+system("rm -r ./ArchRLogs/")
+system(paste("rm -r", temp_archr_dir))
+if(out_dir != "./") {
+  file.remove(paste0(in_sample, ".arrow"))
+}
+rm(proj)
+```
+
+
+[Return to Contents](#contents)
+
+<a id="write_meta"></a>
+
 #### Write unfiltered and filtered metadata
 ```{r}
 meta_out <- paste0(out_prefix, "all_metadata.csv.gz")
@@ -609,6 +734,12 @@ out_json <- paste0(out_prefix, "atac_qc_metrics.json")
 #### Barcode QC Stats
 ```{r}
 barcode_conditions <- list("all" = rep(TRUE, nrow(meta)),
+                           "singlets" = ifelse(n_post_doublet_filter > 0,
+                                               rep(TRUE, n_post_doublet_filter),
+                                               FALSE),
+                           "doublets" = ifelse(n_doublets > 0, 
+                                               rep(TRUE, n_doublets), 
+                                               FALSE),
                            "pass_qc" = meta$altius_frac > cutoffs$altius_frac & meta$peaks_frac > cutoffs$peaks_frac & meta$tss_frac > cutoffs$tss_frac,
                            "fail_qc" = meta$altius_frac < cutoffs$altius_frac | meta$peaks_frac < cutoffs$peaks_frac | meta$tss_frac < cutoffs$tss_frac,
                            "fail_altius_frac" = meta$altius_frac < cutoffs$altius_frac,
@@ -626,6 +757,8 @@ q_of <- function(x, target, q) {
 }
 
 barcode_qc_stats <- data.frame(metric = c("Barcodes with > 1k reads",
+                                          "Barcodes from Singlets",
+                                          "Barcodes from Doublets",
                                           "Barcodes pass QC",
                                           "Barcodes fail QC",
                                           "Barcodes fail altius_frac",
@@ -759,9 +892,9 @@ if(file.exists(in_sum)) {
 ```{r}
 if(file.exists(in_sum)){
   out_proj <- paste0(out_prefix, "saturation_projection.csv.gz")
-  stm(paste0("OUT Sat. Projection   : ", out_proj))
-  print(paste0("OUT Sat. Projection    : ", out_proj))
+
   stm(paste("Writing Saturation Projection to", out_proj))
+  print(paste("Writing Saturation Projection to", out_proj))
   
   fwrite(saturation_projection,
          out_proj)
@@ -1165,7 +1298,7 @@ cowplot::plot_grid(plotlist = plot_list,
 ### Write QC JSON
 
 ```{r Save QC JSON}
-stm(paste0("Writing JSON to",out_json))
+stm(paste0("Writing JSON to ",out_json))
 
 qc_list_json <- jsonlite::toJSON(qc_list,
                                  auto_unbox = TRUE,
@@ -1194,7 +1327,7 @@ time_message <- paste0("Elapsed Time: ",
                        " ", units(diff_time))
 print(time_message)
 stm(time_message)
-stm("H5 metadata process complete.")
+stm("10x ATAC QC process complete.")
 ```
 
 [Return to Contents](#contents)
