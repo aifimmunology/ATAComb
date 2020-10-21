@@ -499,7 +499,7 @@ proj <- ArchRProject(ArrowFiles = ArrowFile,
 archr_names <- getCellNames(proj)
 archr_names <- sub(".+#","",archr_names)
 new_barcodes <- meta$barcodes[match(archr_names, meta$original_barcodes)]
-rownames(proj@cellColData) <-new_barcodes
+rownames(proj@cellColData) <- new_barcodes
 
 proj <- filterDoublets(proj)
 
@@ -540,7 +540,23 @@ proj <- saveArchRProject(proj)
 
 ArrowFile <- getArrowFiles(proj)
 
-file.rename(ArrowFile, paste0(out_prefix, "archr.arrow"))
+out_arrow <- paste0(out_prefix, "archr.arrow")
+
+file.rename(ArrowFile, out_arrow)
+```
+
+Replace original cell names with barcodes
+```{r}
+h5_CellNames <- h5ls(out_arrow)
+h5_CellNames <- h5_CellNames[h5_CellNames$name == "CellNames",]
+
+walk(1:nrow(h5_CellNames),
+     function(i) {
+       target <- h5_CellNames$full_name[i]
+       target_bcs <- h5read(out_arrow, target)
+       new_bcs <- meta$barcodes[match(target_bcs, meta$original_barcodes)]
+       h5write(new_bcs, out_arrow, target)
+     })
 ```
 
 #### Clean up ArchR files
