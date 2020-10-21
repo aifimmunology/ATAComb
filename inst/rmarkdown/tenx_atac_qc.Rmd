@@ -549,7 +549,7 @@ h5_ls <- h5ls(out_arrow)
 
 h5_MetaNames <- h5_ls[h5_ls$group == "/Metadata",]
 h5_MetaNames <- h5_MetaNames[h5_MetaNames$dim != 1,]
-h5_MetaNames <- h5_MetaNames[h5_MetaNames$dim != length(archr_names),]
+h5_MetaNames <- h5_MetaNames[h5_MetaNames$dim != length(filtered_archr_names),]
 
 h5_CellNames <- h5read(out_arrow, "/Metadata/CellNames")
 h5_keepLogic <- h5_CellNames %in% archr_barcodes
