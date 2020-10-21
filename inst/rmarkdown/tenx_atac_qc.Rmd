@@ -542,11 +542,13 @@ ArrowFile <- getArrowFiles(proj)
 
 out_arrow <- paste0(out_prefix, "archr.arrow")
 
+stm(paste0("Saving .arrow to ", out_arrow))
 file.rename(ArrowFile, out_arrow)
 ```
 
 Replace original cell names with barcodes
 ```{r}
+stm(paste0("Updating barcodes in ", out_arrow))
 h5_CellNames <- h5ls(out_arrow)
 h5_CellNames <- h5_CellNames[h5_CellNames$name == "CellNames",]
 
@@ -557,6 +559,12 @@ walk(1:nrow(h5_CellNames),
        new_bcs <- meta$barcodes[match(target_bcs, meta$original_barcodes)]
        h5write(new_bcs, out_arrow, target)
      })
+
+for(meta_col in additional_meta) {
+  h5write(filtered_meta[[meta_col]], 
+          paste0("/Metadata/",meta_col),
+          out_arrow)
+}
 ```
 
 #### Clean up ArchR files
