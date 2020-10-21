@@ -504,7 +504,7 @@ proj <- filterDoublets(proj)
 
 # Get filtered names and original barcodes
 filtered_archr_names <- getCellNames(proj)
-filtered_archr_barcodes <- sub(".+#","",archr_names)
+filtered_archr_barcodes <- sub(".+#","",filtered_archr_names)
 
 # Filter metadata to match
 # Get counts for reporting
@@ -530,7 +530,7 @@ filtered_meta$TSSEnrichment <- archr_meta[["TSSEnrichment"]]
 ```{r}
 stm("ArchR: Subsetting to remove doublets")
 proj <- subsetArchRProject(proj,
-                           cells = archr_names,
+                           cells = filtered_archr_names,
                            outputDirectory = paste0(temp_archr_dir,"subset"))
 
 ArrowFile <- getArrowFiles(proj)
