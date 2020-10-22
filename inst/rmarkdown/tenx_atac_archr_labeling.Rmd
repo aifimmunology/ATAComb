@@ -376,7 +376,7 @@ plotEmbedding(proj,
 ```
 
 ```{r}
-results <- data.frame(barcodes = sub(".+#","",rownames(proj@cellColData)),
+results <- data.frame(barcodes = proj$barcodes),
                       seurat_pbmc_type = proj$seurat_pbmc_type,
                       seurat_pbmc_type_score = proj$co_pred_score)
 
