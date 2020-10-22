@@ -571,24 +571,6 @@ for(meta_col in additional_meta) {
 }
 ```
 
-Replace original cell names with barcodes and PBMC ID
-```{r}
-stm(paste0("Updating barcodes in ", out_arrow))
-h5_CellNames <- h5_ls[h5_ls$name == "CellNames",]
-
-walk(1:nrow(h5_CellNames),
-     function(i) {
-       target <- h5_CellNames$full_name[i]
-       target_bcs <- h5read(out_arrow, target)
-       new_bcs <- meta$barcodes[match(target_bcs, meta$original_barcodes)]
-       h5delete(out_arrow, target)
-       h5write(new_bcs, out_arrow, target)
-     })
-
-h5delete(out_arrow, "/Metadata/Sample")
-h5write(filtered_meta$pbmc_sample_id[1], out_arrow, "/Metadata/Sample")
-```
-
 #### Clean up ArchR files
 ```{r}
 stm("ArchR: Cleaning up temporary files")
