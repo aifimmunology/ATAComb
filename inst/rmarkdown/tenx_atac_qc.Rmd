@@ -481,7 +481,8 @@ ArrowFile <- createArrowFiles(inputFiles = in_frag,
                               filterFrags = 500,
                               filterTSS = 0,
                               maxFrags = 1e6,
-                              QCDir = temp_archr_dir)
+                              QCDir = temp_archr_dir,
+                              force = TRUE)
 
 ```
 
@@ -493,54 +494,81 @@ doublet_scores <- addDoubletScores(input = ArrowFile,
                                    force = TRUE)
 
 proj <- ArchRProject(ArrowFiles = ArrowFile,
-                     outputDirectory = temp_archr_dir,
                      copyArrows = TRUE)
 
-archr_names <- getCellNames(proj)
-archr_names <- sub(".+#","",archr_names)
-new_barcodes <- meta$barcodes[match(archr_names, meta$original_barcodes)]
-rownames(proj@cellColData) <-new_barcodes
+# Store unfiltered names for later
+unfiltered_archr_names <- getCellNames(proj)
 
+# Remove doublets
 proj <- filterDoublets(proj)
 
-filtered_barcodes <- getCellNames(proj)
-archr_meta <- getCellColData(proj)
+# Get filtered names and original barcodes
+filtered_archr_names <- getCellNames(proj)
+filtered_archr_barcodes <- sub(".+#","",filtered_archr_names)
 
+# Filter metadata to match
+# Get counts for reporting
 n_pre_doublet_filter <- nrow(filtered_meta)
 
 filtered_meta <- filtered_meta %>%
-  dplyr::filter(barcodes %in% filtered_barcodes)
+  dplyr::filter(original_barcodes %in% filtered_archr_barcodes)
 
 n_post_doublet_filter <- nrow(filtered_meta)
-n_doublets <- n_post_doublet_filter - n_pre_doublet_filter
+n_doublets <-  n_pre_doublet_filter - n_post_doublet_filter
 
-filtered_meta <- filtered_meta[match(filtered_meta$barcodes, filtered_barcodes),]
+# Match order to archr file
+filtered_meta <- filtered_meta[match(filtered_meta$original_barcodes, filtered_archr_barcodes),]
 
+# Add additional ArchR metadata to filtered_meta
+archr_meta <- getCellColData(proj)
 filtered_meta$DoubletScore <- archr_meta[["DoubletScore"]]
 filtered_meta$DoubletEnrichment <- archr_meta[["DoubletEnrichment"]]
 filtered_meta$TSSEnrichment <- archr_meta[["TSSEnrichment"]]
 ```
 
-#### Add additional metadata to archr project
-```{r}
-stm("ArchR: Merging metadata")
-
-additional_meta <- setdiff(names(filtered_meta), names(archr_meta))
-for(meta_col in additional_meta) {
-  proj <- addCellColData(proj,
-                         data = filtered_meta[[meta_col]],
-                         name = meta_col,
-                         cells = filtered_meta$barcodes)
-}
-```
-
 #### Save Archr project and shift arrow to output directory
 ```{r}
-proj <- saveArchRProject(proj)
+stm("ArchR: Subsetting to remove doublets")
+proj <- subsetArchRProject(proj,
+                           cells = filtered_archr_names,
+                           outputDirectory = paste0(temp_archr_dir,"subset"))
 
 ArrowFile <- getArrowFiles(proj)
 
-file.rename(ArrowFile, paste0(out_prefix, "archr.arrow"))
+out_arrow <- paste0(out_prefix, "archr.arrow")
+
+stm(paste0("Saving .arrow to ", out_arrow))
+file.copy(ArrowFile, out_arrow)
+```
+
+Resolve metadata discrepencies
+```{r}
+stm("Resolving metadata discrepencies")
+proj_meta <- getCellColData(proj)
+h5_ls <- h5ls(out_arrow)
+
+h5_MetaNames <- h5_ls[h5_ls$group == "/Metadata",]
+h5_MetaNames <- h5_MetaNames[h5_MetaNames$dim != 1,]
+h5_MetaNames <- h5_MetaNames[h5_MetaNames$dim != length(filtered_archr_names),]
+
+h5_CellNames <- h5read(out_arrow, "/Metadata/CellNames")
+h5_keepLogic <- h5_CellNames %in% filtered_archr_barcodes
+
+for(i in 1:nrow(h5_MetaNames)) {
+  target <- h5_MetaNames$full_name[i]
+  h5_MetaVals <- h5read(out_arrow, target)
+  h5_MetaVals <- h5_MetaVals[h5_keepLogic]
+  h5delete(out_arrow, target)
+  h5write(h5_MetaVals, out_arrow, target)
+}
+
+# Add missing metadata
+additional_meta <- setdiff(names(filtered_meta), h5_MetaNames$name)
+for(meta_col in additional_meta) {
+  h5write(filtered_meta[[meta_col]],
+          out_arrow,
+          paste0("/Metadata/",meta_col))
+}
 ```
 
 #### Clean up ArchR files
@@ -550,6 +578,7 @@ stm("ArchR: Cleaning up temporary files")
 system("rm -r ./tmp/")
 system("rm -r ./ArchRLogs/")
 system(paste("rm -r", temp_archr_dir))
+system(paste("rm -r", paste0(temp_archr_dir,"subset")))
 if(out_dir != "./") {
   file.remove(paste0(in_sample, ".arrow"))
 }
