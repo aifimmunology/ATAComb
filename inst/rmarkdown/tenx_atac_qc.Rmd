@@ -1156,6 +1156,11 @@ names(frag_widths)[3] <- "totals"
 frag_widths <- frag_widths[, frac:=totals/sum(totals), by = list(pass_fail)]
 frag_widths <- frag_widths[width <= 750]
 
+out_widths <- paste0(out_prefix, "_fragment_width_summary.csv.gz") 
+
+stm(paste("Writing fragment width summary to", out_widths))
+fwrite(frag_widths, out_widths)
+
 ggplot(data = frag_widths) +
   geom_line(aes(x = width,
                 y = frac,
