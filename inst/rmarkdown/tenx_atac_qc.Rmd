@@ -216,10 +216,10 @@ feature_mat_names <- sub("_sparse_matrix.tsv.gz","",feature_mat_names)
 stm(paste(c("Available reference matrices:", feature_mat_names), collapse = " "))
 
 matching_refs <- intersect(reference_names, feature_mat_names)
-stm(paste(c("Matching reference matrices:", matching_refs), collapse = " "))
+stm(paste(c("Preprocessed reference data:", matching_refs), collapse = " "))
 
 if(length(matching_refs) == 0) {
-  stop("Computed reference matrices do not match available references")
+  stop("Preprocessed reference datasets do not match available references")
 } else {
   reference_files <- reference_files[match(matching_refs, reference_names)]
   reference_names <- matching_refs
