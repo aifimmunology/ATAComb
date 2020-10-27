@@ -1,0 +1,472 @@
+---
+title: "ArchR Doublet and Labeling analysis"
+author: 
+ - Lucas Graybuck
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output:
+  html_document:
+    code_folding: hide
+    df_print: paged
+    self_contained: true
+params:
+  in_arrow: NULL
+  in_sample: NULL
+  genome: NULL
+  n_threads: NULL
+  out_dir: NULL
+---
+
+<a id="contents"></a>
+
+## Contents
+
+- [Session Preparation](#session_preparation)
+- [Load References](#load_refs)
+
+#### [ArchR Analysis](#archr_setup)
+- [Cell Barcode QC](#archr_doublets)
+- [Fragment Metrics](#archr_label)
+- [Saturation Metrics](#archr_output)
+
+[Write QC JSON](#json_out)
+
+#### [Session Info](#session_info)
+
+<a id="data_processing"></a>
+
+## Data Processing
+
+<a id="session_preparation"></a>
+
+### Session Preparation
+
+#### Load libraries:
+```{r Load Libraries}
+start_time <- Sys.time()
+
+quiet_library <- function(...) {
+  suppressPackageStartupMessages(library(...))
+}
+quiet_library(H5weaver)
+quiet_library(ArchR)
+quiet_library(data.table)
+quiet_library(jsonlite)
+options(stringsAsFactors = FALSE)
+```
+
+Declaring start
+```{r Declare start}
+stm("Starting ArchR analysis")
+```
+
+#### Argument parsing
+```{r Parse arguments}
+if(is.null(params$in_arrow)) {
+  out_dir <- tempdir()
+  arrow_source_gz <- system.file("testdata/X000_PB000000.arrow.gz",
+                         package = "ATAComb")
+  arrow_gz <- file.path(out_dir, basename(arrow_source_gz))
+  file.copy(arrow_source_gz, arrow_gz)
+  system(paste("gunzip", arrow_gz))
+  in_arrow <- sub(".gz$", "", arrow_gz)
+  in_sample <- "X000_PB000000"
+  genome <- "hg38"
+  n_threads <- parallel::detectCores()
+} else {
+  in_arrow <- params$in_arrow
+  in_sample <- params$in_sample
+  genome <- params$genome
+  out_dir <- params$out_dir
+  n_threads <- as.numeric(params$n_threads)
+}
+
+# Check Genome
+if(!genome %in% c("hg38","hg19")) {
+  stm(paste0("Genome must be 'hg38' or 'hg19'. Genome provided: ", genome))
+  stop()
+}
+
+if(is.null(n_threads)) {
+  n_threads <- parallel::detectCores()
+}
+
+temp_dir <- file.path(out_dir, "temp")
+
+stm(paste0("IN  .arrow                : ", in_arrow))
+stm(paste0("IN  Sample ID             : ", in_sample))
+stm(paste0("IN  Genome                : ", genome))
+stm(paste0("PAR N Threads             : ", n_threads))
+stm(paste0("OUT Directory             : ", out_dir))
+```
+
+#### Input Parameters
+```{r Print Arguments}
+print(c(
+  paste0("IN  .arrow                : ", in_arrow),
+  paste0("IN  Sample ID             : ", in_sample),
+  paste0("IN  Genome                : ", genome),
+  paste0("PAR N Threads             : ", n_threads),
+  paste0("OUT Directory             : ", out_dir)
+))
+```
+
+#### Check Input Files
+```{r Check Inputs}
+if(!file.exists(in_arrow)) {
+  stm(paste0("ERROR: Cannot find IN .arrow :", in_arrow))
+  stop()
+}
+```
+
+#### Create out directory if missing
+```{r Create Out Dir}
+if(!dir.exists(out_dir)) {
+  stm(paste0("Creating Output Directory: ",out_dir))
+  dir.create(out_dir, 
+             recursive = TRUE)
+}
+```
+
+[Return to Contents](#contents)
+
+<a id="load_refs"></a>
+
+#### Load reference dataset
+```{r}
+reference_source <- system.file("reference/seurat_rna_pbmc_ref.h5",
+                                package = "ATAComb")
+file.copy(reference_source, file.path(out_dir,"seurat_pbmc_ref.h5"))
+seurat_reference <- file.path(out_dir, "seurat_pbmc_ref.h5")
+rna_so <- H5weaver::read_h5_seurat(seurat_reference)
+file.remove(seurat_reference)
+```
+
+[Return to Contents](#contents)
+
+<a id="archr_setup"></a>
+
+#### Set ArchR parameters
+```{r setup archr}
+stm("Setting ArchR parameters")
+set.seed(3030)
+
+addArchRThreads(n_threads, force = TRUE)
+addArchRGenome(genome)
+```
+
+[Return to Contents](#contents)
+
+<a id="archr_doublets"></a>
+
+### ArchR Doublet process
+
+#### Set up ArchR Project
+```{r}
+stm("Building ArchR Project")
+proj <- ArchRProject(ArrowFiles = in_arrow,
+                     outputDirectory = temp_dir)
+```
+
+```{r}
+cell_padding <- FALSE
+n_cells <- length(getCellNames(proj))
+
+if(n_cells < 200) {
+  stm("WARNING: Too few cells for stand-alone label transfer")
+  stm("WARNING: Will pad with additional cells")
+  
+  padding_source <- system.file("testdata/Padding.arrow.gz", package = "ATAComb")
+  padding_gz <- file.path(temp_dir, "Padding.arrow.gz")
+  
+  file.copy(padding_source, padding_gz)
+  
+  system(paste("gunzip", padding_gz))
+  
+  padding_file <- sub(".gz$","",padding_gz)
+  
+  proj <- ArchRProject(ArrowFiles = c(in_arrow, padding_file),
+                       outputDirectory = temp_dir)
+  
+  cell_padding <- TRUE
+}
+```
+
+
+[Return to Contents](#contents)
+
+<a id="archr_label"></a>
+
+### ArchR Label transfer
+
+#### Reduce ATAC dims with LSI and add clusters
+```{r}
+stm("ArchR: Adding IterativeLSI")
+proj <- addIterativeLSI(ArchRProj = proj)
+```
+
+```{r}
+stm("ArchR: Adding Clusters")
+proj <- addClusters(input = proj,
+                    reducedDims = "IterativeLSI")
+```
+
+```{r}
+stm("ArchR: Adding UMAP")
+proj <- addUMAP(ArchRProj = proj,
+                reducedDims = "IterativeLSI")
+umap_dims <- as.data.frame(getEmbedding(proj, "UMAP", returnDF = TRUE))
+```
+
+```{r}
+stm("ArchR: Running Unconstrained Integration")
+outDir <- temp_dir
+proj <- addGeneIntegrationMatrix(ArchRProj = proj,
+                                 useMatrix = "GeneScoreMatrix",
+                                 matrixName = "GeneIntegrationMatrix",
+                                 reducedDims = "IterativeLSI",
+                                 seRNA = rna_so,
+                                 groupRNA = "celltype",
+                                 nameCell = "un_pred_type",
+                                 nameGroup = "un_pred_group",
+                                 nameScore = "un_pred_score",
+                                 force = TRUE
+)
+```
+
+```{r}
+if(cell_padding) {
+  cell_names <- getCellNames(proj)
+  padding_cells <- grepl("^Padding#",cell_names)
+  
+  un_pred_group <- proj$un_pred_group[!padding_cells]
+  un_pred_score <- proj$un_pred_score[!padding_cells]
+  un_pred_type <- proj$un_pred_type[!padding_cells]
+  Clusters <- proj$Clusters[!padding_cells]
+  
+  orig_cells <- cell_names[!padding_cells]
+  
+  proj <- ArchRProject(ArrowFiles = in_arrow,
+                       outputDirectory = temp_dir)
+  
+  proj <- addCellColData(proj, data = un_pred_group, name = "un_pred_group", cells = orig_cells)
+  proj <- addCellColData(proj, data = un_pred_score, name = "un_pred_score", cells = orig_cells)
+  proj <- addCellColData(proj, data = un_pred_type, name = "un_pred_type", cells = orig_cells)
+  proj <- addCellColData(proj, data = Clusters, name = "Clusters", cells = orig_cells)
+}
+```
+
+
+#### Unconstrained confusion matrix
+```{r}
+un_conf_mat <- as.matrix(confusionMatrix(proj$Clusters, proj$un_pred_group))
+heatmap(un_conf_mat)
+```
+
+#### Partition for constrained transfer
+```{r}
+rna_types <- unique(rna_so@meta.data$celltype)
+
+rna_patterns <- list(b_pdc = "^B|Plasmacytoid",
+                     mono_dc = "^Mono|Myeloid",
+                     tnk_cell = "^T|NK")
+
+rna_clusters <- lapply(rna_patterns,
+                       function(x) {
+                           rna_types[grepl(x, rna_types)]
+                       })
+
+rna_cells <- lapply(rna_clusters,
+                   function(x) {
+                       colnames(rna_so)[rna_so@meta.data$celltype %in% x]
+                   })
+```
+
+```{r}
+preClust <- colnames(un_conf_mat)[apply(un_conf_mat, 1 , which.max)]
+
+atac_clusters <- lapply(rna_clusters,
+                        function(x) {
+                            rownames(un_conf_mat)[preClust %in% x]
+                        })
+
+atac_cells <- lapply(atac_clusters,
+                    function(x) {
+                        proj$cellNames[proj$Clusters %in% x]
+                    })
+
+# hold out ATAC cell sets with < 200 cells.
+# prevents a Seurat crash
+atac_cell_counts <- unlist(lapply(atac_cells, length))
+
+if(any(atac_cell_counts < 200)) {
+  small_logi <- atac_cell_counts < 200
+  small_names <- names(atac_cell_counts)[small_logi]
+  
+  stm(paste(paste(small_names, collapse = " "),
+            "subset(s) too small to run contrained integration"))
+  
+  stm("All subsets too small to run contrained integration")
+  stm("Results will be based on unconstrained integration.")
+  run_co <- FALSE
+} else {
+  groupList <- lapply(names(atac_cells),
+                      function(x) {
+                        SimpleList(ATAC = atac_cells[[x]],
+                                   RNA = rna_cells[[x]])
+                      })
+  groupList <- SimpleList(groupList)
+  run_co <- TRUE
+}
+
+```
+
+#### Constrained integration
+```{r}
+if(run_co) {
+  stm("ArchR: Running Constrained Integration")
+  
+  proj <- addGeneIntegrationMatrix(ArchRProj = proj,
+                                 useMatrix = "GeneScoreMatrix",
+                                 matrixName = "GeneIntegrationMatrix",
+                                 reducedDims = "IterativeLSI",
+                                 seRNA = rna_so,
+                                 groupList = groupList,
+                                 groupRNA = "celltype",
+                                 nameCell = "co_pred_type",
+                                 nameGroup = "co_pred_group",
+                                 nameScore = "co_pred_score",
+                                 force = TRUE
+  )
+  constrained_integration <- TRUE
+} else {
+  proj$co_pred_group <- proj$un_pred_group
+  proj$co_pred_score <- proj$un_pred_score
+  proj$co_pred_type <- proj$un_pred_type
+  constrained_integration <- FALSE
+}
+```
+
+#### Constrained confusion matrix
+```{r}
+co_conf_mat <- as.matrix(confusionMatrix(proj$Clusters, proj$co_pred_group))
+heatmap(co_conf_mat)
+```
+
+#### Map labels
+```{r}
+old_labels <- rownames(co_conf_mat)
+new_labels <- colnames(co_conf_mat)[apply(co_conf_mat, 1, which.max)]
+
+label_map <- mapLabels(old_labels,
+                       oldLabels = old_labels,
+                       newLabels = new_labels)
+label_map
+```
+
+#### Transfer labels to ATAC
+```{r}
+proj$seurat_pbmc_type <- mapLabels(proj$Clusters, 
+                                   newLabels = label_map, 
+                                   oldLabels = old_labels)
+```
+
+```{r}
+plotEmbedding(proj,
+              name = "seurat_pbmc_type")
+```
+
+```{r}
+results <- data.frame(barcodes = proj$barcodes,
+                      seurat_pbmc_type = proj$seurat_pbmc_type,
+                      seurat_pbmc_type_score = proj$co_pred_score)
+
+type_table <- as.data.frame(table(results$seurat_pbmc_type))
+names(type_table) <- c("seurat_pbmc_type","n_cells")
+type_table$seurat_pbmc_type <- as.character(type_table$seurat_pbmc_type)
+type_table$frac_cells <- type_table$n_cells / sum(type_table$n_cells)
+
+qc_table(type_table)
+```
+
+
+[Return to Contents](#contents)
+
+<a id="archr_output"></a>
+
+#### Write results as a csv
+```{r}
+out_table_path <- file.path(out_dir,
+                            paste0(in_sample, "_labeling_results.csv.gz"))
+
+stm(paste0("Writing cell labels to ", out_table_path))
+
+fwrite(results,
+       out_table_path)
+```
+
+```{r}
+file.remove(temp_dir,
+            recursive = TRUE)
+temp_arrows <- list.files("./", pattern = ".arrow")
+file.remove(temp_arrows)
+```
+
+[Return to Contents](#contents)
+
+<a id="json_out"></a>
+
+### Write QC JSON
+```{r}
+out_json <- file.path(out_dir,
+                      paste0(in_sample, "_labeling_summary.json"))
+
+qc_list <- list(report_type = "atac_labeling_v1",
+                report_datetime = as.character(start_time),
+                report_uuid = ids::uuid(use_time = TRUE),
+                package = "ATAComb",
+                package_version = sessionInfo()$otherPkgs$ATAComb$Version,
+                sample_id = in_sample,
+                label_transfer_settings = list(
+                  genome = genome,
+                  reference_file = reference_source,
+                  unconstrained_integration_padding = cell_padding,
+                  constrained_integration = constrained_integration
+                ),
+                cell_type_summary = as.list(type_table)
+                )
+```
+
+```{r Save QC JSON}
+stm(paste0("Writing JSON to",out_json))
+
+qc_list_json <- jsonlite::toJSON(qc_list,
+                                 auto_unbox = TRUE,
+                                 pretty = TRUE)
+
+writeLines(qc_list_json,
+           out_json)
+```
+
+[Return to Contents](#contents)
+
+<a id="session_info"></a>
+
+## Session Information
+
+```{r Session Info}
+sessionInfo()
+```
+
+Total time elapsed
+```{r Show Time}
+end_time <- Sys.time()
+diff_time <- end_time - start_time
+time_message <- paste0("Elapsed Time: ", 
+                       round(diff_time, 3),
+                       " ", units(diff_time))
+print(time_message)
+stm(time_message)
+stm("10x ATAC ArchR labeling process complete.")
+```
+
+[Return to Contents](#contents)
