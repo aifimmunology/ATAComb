@@ -216,10 +216,10 @@ feature_mat_names <- sub("_sparse_matrix.tsv.gz","",feature_mat_names)
 stm(paste(c("Available reference matrices:", feature_mat_names), collapse = " "))
 
 matching_refs <- intersect(reference_names, feature_mat_names)
-stm(paste(c("Matching reference matrices:", matching_refs), collapse = " "))
+stm(paste(c("Preprocessed reference data:", matching_refs), collapse = " "))
 
 if(length(matching_refs) == 0) {
-  stop("Computed reference matrices do not match available references")
+  stop("Preprocessed reference datasets do not match available references")
 } else {
   reference_files <- reference_files[match(matching_refs, reference_names)]
   reference_names <- matching_refs
@@ -379,6 +379,8 @@ samplesheet <- read.csv(in_key)
 
 in_sample <- as.character(samplesheet$SampleID[samplesheet$WellID == in_well])
 
+stm(paste0("SampleSheet WellID: ", in_well, "; SampleID: ", in_sample))
+
 out_prefix <- file.path(out_dir, paste0(in_batch, "_", in_sample, "_"))
 ```
 
@@ -481,8 +483,10 @@ ArrowFile <- createArrowFiles(inputFiles = in_frag,
                               filterFrags = 500,
                               filterTSS = 0,
                               maxFrags = 1e6,
-                              QCDir = temp_archr_dir,
+                              QCDir = paste0(temp_archr_dir,"/qc"),
                               force = TRUE)
+
+stm(paste0("ArchR: ArrowFile generated at ", ArrowFile))
 
 ```
 
@@ -495,6 +499,9 @@ doublet_scores <- addDoubletScores(input = ArrowFile,
 
 proj <- ArchRProject(ArrowFiles = ArrowFile,
                      copyArrows = TRUE)
+
+proj_ArrowFile <- getArrowFiles(proj)
+stm(paste0("ArchR: Project ArrowFile located at ", proj_ArrowFile))
 
 # Store unfiltered names for later
 unfiltered_archr_names <- getCellNames(proj)
@@ -1155,6 +1162,11 @@ frag_widths <- frag_widths[, sum(count), by = list(pass_fail, width)]
 names(frag_widths)[3] <- "totals"
 frag_widths <- frag_widths[, frac:=totals/sum(totals), by = list(pass_fail)]
 frag_widths <- frag_widths[width <= 750]
+
+out_widths <- paste0(out_prefix, "_fragment_width_summary.csv.gz") 
+
+stm(paste("Writing fragment width summary to", out_widths))
+fwrite(frag_widths, out_widths)
 
 ggplot(data = frag_widths) +
   geom_line(aes(x = width,
