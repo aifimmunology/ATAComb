@@ -379,6 +379,8 @@ samplesheet <- read.csv(in_key)
 
 in_sample <- as.character(samplesheet$SampleID[samplesheet$WellID == in_well])
 
+stm(paste0("SampleSheet WellID: ", in_well, "; SampleID: ", in_sample))
+
 out_prefix <- file.path(out_dir, paste0(in_batch, "_", in_sample, "_"))
 ```
 
@@ -481,8 +483,10 @@ ArrowFile <- createArrowFiles(inputFiles = in_frag,
                               filterFrags = 500,
                               filterTSS = 0,
                               maxFrags = 1e6,
-                              QCDir = temp_archr_dir,
+                              QCDir = paste0(temp_archr_dir,"/qc"),
                               force = TRUE)
+
+stm(paste0("ArchR: ArrowFile generated at ", ArrowFile))
 
 ```
 
@@ -495,6 +499,9 @@ doublet_scores <- addDoubletScores(input = ArrowFile,
 
 proj <- ArchRProject(ArrowFiles = ArrowFile,
                      copyArrows = TRUE)
+
+proj_ArrowFile <- getArrowFiles(proj)
+stm(paste0("ArchR: Project ArrowFile located at ", proj_ArrowFile))
 
 # Store unfiltered names for later
 unfiltered_archr_names <- getCellNames(proj)
