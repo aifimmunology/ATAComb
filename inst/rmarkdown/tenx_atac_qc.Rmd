@@ -483,7 +483,6 @@ ArrowFile <- createArrowFiles(inputFiles = in_frag,
                               filterFrags = 500,
                               filterTSS = 0,
                               maxFrags = 1e6,
-                              QCDir = paste0(temp_archr_dir,"/qc"),
                               force = TRUE)
 
 stm(paste0("ArchR: ArrowFile generated at ", ArrowFile))
@@ -494,7 +493,6 @@ stm(paste0("ArchR: ArrowFile generated at ", ArrowFile))
 ```{r}
 stm("ArchR: Scoring and filtering doublets")
 doublet_scores <- addDoubletScores(input = ArrowFile,
-                                   outDir = temp_archr_dir,
                                    force = TRUE)
 
 proj <- ArchRProject(ArrowFiles = ArrowFile,
@@ -537,8 +535,7 @@ filtered_meta$TSSEnrichment <- archr_meta[["TSSEnrichment"]]
 ```{r}
 stm("ArchR: Subsetting to remove doublets")
 proj <- subsetArchRProject(proj,
-                           cells = filtered_archr_names,
-                           outputDirectory = paste0(temp_archr_dir,"subset"))
+                           cells = filtered_archr_names)
 
 ArrowFile <- getArrowFiles(proj)
 
@@ -578,17 +575,8 @@ for(meta_col in additional_meta) {
 }
 ```
 
-#### Clean up ArchR files
+#### Clean up ArchR in memory
 ```{r}
-stm("ArchR: Cleaning up temporary files")
-
-system("rm -r ./tmp/")
-system("rm -r ./ArchRLogs/")
-system(paste("rm -r", temp_archr_dir))
-system(paste("rm -r", paste0(temp_archr_dir,"subset")))
-if(out_dir != "./") {
-  file.remove(paste0(in_sample, ".arrow"))
-}
 rm(proj)
 ```
 
