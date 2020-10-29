@@ -506,8 +506,10 @@ unfiltered_archr_names <- getCellNames(proj)
 proj <- filterDoublets(proj)
 
 # Get filtered names and original barcodes
-filtered_archr_names <- getCellNames(proj)
+archr_meta <- getCellColData(proj)
+filtered_archr_names <- rownames(archr_meta)[archr_meta$DoubletEnrichment < 1]
 filtered_archr_barcodes <- sub(".+#","",filtered_archr_names)
+archr_meta <- archr_meta[filtered_archr_names,]
 
 # Filter metadata to match
 # Get counts for reporting
@@ -523,7 +525,6 @@ n_doublets <-  n_pre_doublet_filter - n_post_doublet_filter
 filtered_meta <- filtered_meta[match(filtered_meta$original_barcodes, filtered_archr_barcodes),]
 
 # Add additional ArchR metadata to filtered_meta
-archr_meta <- getCellColData(proj)
 filtered_meta$DoubletScore <- archr_meta[["DoubletScore"]]
 filtered_meta$DoubletEnrichment <- archr_meta[["DoubletEnrichment"]]
 filtered_meta$TSSEnrichment <- archr_meta[["TSSEnrichment"]]
