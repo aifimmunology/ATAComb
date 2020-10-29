@@ -475,8 +475,6 @@ valid_barcodes <- list(bcs = filtered_meta$original_barcodes)
 names(valid_barcodes) <- in_sample
 valid_barcodes <- SimpleList(valid_barcodes)
 
-temp_archr_dir <- paste0("archr_temp",ids::uuid())
-
 ArrowFile <- createArrowFiles(inputFiles = in_frag,
                               sampleNames = in_sample,
                               validBarcodes = valid_barcodes,
@@ -555,23 +553,27 @@ h5_MetaNames <- h5_ls[h5_ls$group == "/Metadata",]
 h5_MetaNames <- h5_MetaNames[h5_MetaNames$dim != 1,]
 h5_MetaNames <- h5_MetaNames[h5_MetaNames$dim != length(filtered_archr_names),]
 
-h5_CellNames <- h5read(out_arrow, "/Metadata/CellNames")
-h5_keepLogic <- h5_CellNames %in% filtered_archr_barcodes
-
-for(i in 1:nrow(h5_MetaNames)) {
-  target <- h5_MetaNames$full_name[i]
-  h5_MetaVals <- h5read(out_arrow, target)
-  h5_MetaVals <- h5_MetaVals[h5_keepLogic]
-  h5delete(out_arrow, target)
-  h5write(h5_MetaVals, out_arrow, target)
+if(nrow(h5_MetaNames) > 0) {
+  h5_CellNames <- h5read(out_arrow, "/Metadata/CellNames")
+  h5_keepLogic <- h5_CellNames %in% filtered_archr_barcodes
+  
+  for(i in 1:nrow(h5_MetaNames)) {
+    target <- h5_MetaNames$full_name[i]
+    h5_MetaVals <- h5read(out_arrow, target)
+    h5_MetaVals <- h5_MetaVals[h5_keepLogic]
+    h5delete(out_arrow, target)
+    h5write(h5_MetaVals, out_arrow, target)
+  }
 }
 
 # Add missing metadata
 additional_meta <- setdiff(names(filtered_meta), h5_MetaNames$name)
-for(meta_col in additional_meta) {
-  h5write(filtered_meta[[meta_col]],
-          out_arrow,
-          paste0("/Metadata/",meta_col))
+if(length(additional_meta) > 0) {
+  for(meta_col in additional_meta) {
+    h5write(filtered_meta[[meta_col]],
+            out_arrow,
+            paste0("/Metadata/",meta_col))
+  }
 }
 ```
 
