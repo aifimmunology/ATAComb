@@ -483,7 +483,6 @@ ArrowFile <- createArrowFiles(inputFiles = in_frag,
                               filterFrags = 500,
                               filterTSS = 0,
                               maxFrags = 1e6,
-                              QCDir = paste0(temp_archr_dir,"/qc"),
                               force = TRUE)
 
 stm(paste0("ArchR: ArrowFile generated at ", ArrowFile))
