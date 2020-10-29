@@ -575,17 +575,8 @@ for(meta_col in additional_meta) {
 }
 ```
 
-#### Clean up ArchR files
+#### Clean up ArchR in memory
 ```{r}
-stm("ArchR: Cleaning up temporary files")
-
-system("rm -r ./tmp/")
-system("rm -r ./ArchRLogs/")
-system(paste("rm -r", temp_archr_dir))
-system(paste("rm -r", paste0(temp_archr_dir,"subset")))
-if(out_dir != "./") {
-  file.remove(paste0(in_sample, ".arrow"))
-}
 rm(proj)
 ```
 
