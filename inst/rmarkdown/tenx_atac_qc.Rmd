@@ -160,7 +160,10 @@ quiet_library(ArchR)
 stm("Setting ArchR parameters")
 set.seed(3030)
 
-addArchRThreads(parallel::detectCores(), force = TRUE)
+available_cores <- parallel::detectCores()
+stm(paste0("Using ",available_cores, " threads"))
+
+addArchRThreads(available_cores, force = TRUE)
 addArchRGenome(genome)
 ```
 
