@@ -160,7 +160,10 @@ quiet_library(ArchR)
 stm("Setting ArchR parameters")
 set.seed(3030)
 
-addArchRThreads(parallel::detectCores(), force = TRUE)
+available_cores <- parallel::detectCores()
+stm(paste0("Using ",available_cores, " threads"))
+
+addArchRThreads(available_cores, force = TRUE)
 addArchRGenome(genome)
 ```
 
@@ -475,8 +478,6 @@ valid_barcodes <- list(bcs = filtered_meta$original_barcodes)
 names(valid_barcodes) <- in_sample
 valid_barcodes <- SimpleList(valid_barcodes)
 
-temp_archr_dir <- paste0("archr_temp",ids::uuid())
-
 ArrowFile <- createArrowFiles(inputFiles = in_frag,
                               sampleNames = in_sample,
                               validBarcodes = valid_barcodes,
@@ -508,24 +509,30 @@ unfiltered_archr_names <- getCellNames(proj)
 proj <- filterDoublets(proj)
 
 # Get filtered names and original barcodes
-filtered_archr_names <- getCellNames(proj)
+archr_meta <- getCellColData(proj)
+filtered_archr_names <- rownames(archr_meta)[archr_meta$DoubletEnrichment < 1]
 filtered_archr_barcodes <- sub(".+#","",filtered_archr_names)
+archr_meta <- archr_meta[filtered_archr_names,]
 
 # Filter metadata to match
 # Get counts for reporting
 n_pre_doublet_filter <- nrow(filtered_meta)
 
+stm(paste0("ArchR: Total barcodes = ",n_pre_doublet_filter))
+
 filtered_meta <- filtered_meta %>%
   dplyr::filter(original_barcodes %in% filtered_archr_barcodes)
 
 n_post_doublet_filter <- nrow(filtered_meta)
+stm(paste0("ArchR: Singlet barcodes = ",n_post_doublet_filter))
+
 n_doublets <-  n_pre_doublet_filter - n_post_doublet_filter
+stm(paste0("ArchR: Doublet barcodes = ",n_doublets))
 
 # Match order to archr file
 filtered_meta <- filtered_meta[match(filtered_meta$original_barcodes, filtered_archr_barcodes),]
 
 # Add additional ArchR metadata to filtered_meta
-archr_meta <- getCellColData(proj)
 filtered_meta$DoubletScore <- archr_meta[["DoubletScore"]]
 filtered_meta$DoubletEnrichment <- archr_meta[["DoubletEnrichment"]]
 filtered_meta$TSSEnrichment <- archr_meta[["TSSEnrichment"]]
@@ -555,23 +562,27 @@ h5_MetaNames <- h5_ls[h5_ls$group == "/Metadata",]
 h5_MetaNames <- h5_MetaNames[h5_MetaNames$dim != 1,]
 h5_MetaNames <- h5_MetaNames[h5_MetaNames$dim != length(filtered_archr_names),]
 
-h5_CellNames <- h5read(out_arrow, "/Metadata/CellNames")
-h5_keepLogic <- h5_CellNames %in% filtered_archr_barcodes
-
-for(i in 1:nrow(h5_MetaNames)) {
-  target <- h5_MetaNames$full_name[i]
-  h5_MetaVals <- h5read(out_arrow, target)
-  h5_MetaVals <- h5_MetaVals[h5_keepLogic]
-  h5delete(out_arrow, target)
-  h5write(h5_MetaVals, out_arrow, target)
+if(nrow(h5_MetaNames) > 0) {
+  h5_CellNames <- h5read(out_arrow, "/Metadata/CellNames")
+  h5_keepLogic <- h5_CellNames %in% filtered_archr_barcodes
+  
+  for(i in 1:nrow(h5_MetaNames)) {
+    target <- h5_MetaNames$full_name[i]
+    h5_MetaVals <- h5read(out_arrow, target)
+    h5_MetaVals <- h5_MetaVals[h5_keepLogic]
+    h5delete(out_arrow, target)
+    h5write(h5_MetaVals, out_arrow, target)
+  }
 }
 
 # Add missing metadata
 additional_meta <- setdiff(names(filtered_meta), h5_MetaNames$name)
-for(meta_col in additional_meta) {
-  h5write(filtered_meta[[meta_col]],
-          out_arrow,
-          paste0("/Metadata/",meta_col))
+if(length(additional_meta) > 0) {
+  for(meta_col in additional_meta) {
+    h5write(filtered_meta[[meta_col]],
+            out_arrow,
+            paste0("/Metadata/",meta_col))
+  }
 }
 ```
 
@@ -1151,7 +1162,7 @@ names(frag_widths)[3] <- "totals"
 frag_widths <- frag_widths[, frac:=totals/sum(totals), by = list(pass_fail)]
 frag_widths <- frag_widths[width <= 750]
 
-out_widths <- paste0(out_prefix, "_fragment_width_summary.csv.gz") 
+out_widths <- paste0(out_prefix, "fragment_width_summary.csv.gz") 
 
 stm(paste("Writing fragment width summary to", out_widths))
 fwrite(frag_widths, out_widths)
