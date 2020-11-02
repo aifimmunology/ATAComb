@@ -400,7 +400,7 @@ stm(paste0("Reading 10x metadata from ", in_pbm))
 
 if(grepl("per_barcode_metrics.csv", in_pbm)) {
   tenx_meta <- fread(in_pbm)
-  tenx_meta <- tenx_meta[, list(atac_barcode, atac_raw_reads, atac_dup_reads, atac_mitochondrial_reads , atac_fragments)]
+  tenx_meta <- tenx_meta[, list(barcode, atac_raw_reads, atac_dup_reads, atac_mitochondrial_reads , atac_fragments)]
   names(tenx_meta) <- c("original_barcodes","n_fragments","n_duplicate","n_mito","n_unique")
 } else if(grepl("barcode_counts.tsv", in_pbm)) {
   stm("Using barcode_counts.tsv")
@@ -480,6 +480,7 @@ valid_barcodes <- SimpleList(valid_barcodes)
 
 ArrowFile <- createArrowFiles(inputFiles = in_frag,
                               sampleNames = in_sample,
+                              outputNames = in_sample,
                               validBarcodes = valid_barcodes,
                               filterFrags = 500,
                               filterTSS = 0,
