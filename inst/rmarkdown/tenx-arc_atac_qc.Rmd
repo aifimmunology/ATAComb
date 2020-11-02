@@ -189,9 +189,9 @@ if(!dir.exists(in_tenx)) {
     stm("WARNING: Some QC metrics will not be calculated")
   }
   
-  in_frag <- file.path(in_tenx, "fragments.tsv.gz")
+  in_frag <- file.path(in_tenx, "atac_fragments.tsv.gz")
   if(!file.exists(in_frag)) {
-    stm(paste0("ERROR: Cannot find 10x fragments.tsv.gz:", in_tenx))
+    stm(paste0("ERROR: Cannot find 10x atac_fragments.tsv.gz:", in_tenx))
     stop()
   }
 }
