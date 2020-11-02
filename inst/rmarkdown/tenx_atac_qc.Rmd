@@ -510,17 +510,26 @@ unfiltered_archr_names <- getCellNames(proj)
 if(min(doublet_scores[[1]]$doubletEnrich < 1)) {
   # Remove doublets
   proj <- filterDoublets(proj)
+  
+  # Get filtered names and original barcodes
+  archr_meta <- getCellColData(proj)
+  filtered_archr_names <- rownames(archr_meta)[archr_meta$DoubletEnrichment < 1]
+  filtered_archr_barcodes <- sub(".+#","",filtered_archr_names)
+  archr_meta <- archr_meta[filtered_archr_names,]
+  
   filter_doublets <- TRUE
 } else {
   stm("WARNING: Doublet Scoring failed - retaining all cells.")
+  
+  # Don't filter names and original barcodes
+  archr_meta <- getCellColData(proj)
+  filtered_archr_names <- rownames(archr_meta)
+  filtered_archr_barcodes <- sub(".+#","",filtered_archr_names)
+  archr_meta <- archr_meta[filtered_archr_names,]
+  
   filter_doublets <- FALSE
 }
 
-# Get filtered names and original barcodes
-archr_meta <- getCellColData(proj)
-filtered_archr_names <- rownames(archr_meta)[archr_meta$DoubletEnrichment < 1]
-filtered_archr_barcodes <- sub(".+#","",filtered_archr_names)
-archr_meta <- archr_meta[filtered_archr_names,]
 
 # Filter metadata to match
 # Get counts for reporting
