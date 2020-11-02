@@ -505,8 +505,14 @@ stm(paste0("ArchR: Project ArrowFile located at ", proj_ArrowFile))
 # Store unfiltered names for later
 unfiltered_archr_names <- getCellNames(proj)
 
-# Remove doublets
-proj <- filterDoublets(proj)
+# Check for doublet scoring
+# This will be FALSE in the case of small test datasets
+if(min(doublet_scores[[1]]$doubletEnrich < 1)) {
+  # Remove doublets
+  proj <- filterDoublets(proj)
+} else {
+  stm("WARNING: Doublet Scoring failed - retaining all cells.")
+}
 
 # Get filtered names and original barcodes
 archr_meta <- getCellColData(proj)
