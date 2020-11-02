@@ -510,8 +510,10 @@ unfiltered_archr_names <- getCellNames(proj)
 if(min(doublet_scores[[1]]$doubletEnrich < 1)) {
   # Remove doublets
   proj <- filterDoublets(proj)
+  filter_doublets <- TRUE
 } else {
   stm("WARNING: Doublet Scoring failed - retaining all cells.")
+  filter_doublets <- FALSE
 }
 
 # Get filtered names and original barcodes
@@ -546,9 +548,11 @@ filtered_meta$TSSEnrichment <- archr_meta[["TSSEnrichment"]]
 
 #### Save Archr project and shift arrow to output directory
 ```{r}
-stm("ArchR: Subsetting to remove doublets")
-proj <- subsetArchRProject(proj,
-                           cells = filtered_archr_names)
+if(filter_doublets) {
+  stm("ArchR: Subsetting to remove doublets")
+  proj <- subsetArchRProject(proj,
+                             cells = filtered_archr_names)
+}
 
 ArrowFile <- getArrowFiles(proj)
 
