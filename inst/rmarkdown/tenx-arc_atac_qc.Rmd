@@ -400,7 +400,7 @@ stm(paste0("Reading 10x metadata from ", in_pbm))
 
 if(grepl("per_barcode_metrics.csv", in_pbm)) {
   tenx_meta <- fread(in_pbm)
-  tenx_meta <- tenx_meta[, list(barcode, atac_raw_reads, atac_dup_reads, atac_mitochondrial_reads , atac_fragments)]
+  tenx_meta <- tenx_meta[, list(barcode, atac_raw_reads, atac_dup_reads, atac_mitochondrial_reads, atac_fragments)]
   names(tenx_meta) <- c("original_barcodes","n_fragments","n_duplicate","n_mito","n_unique")
 } else if(grepl("barcode_counts.tsv", in_pbm)) {
   stm("Using barcode_counts.tsv")
@@ -456,13 +456,14 @@ meta$pbmc_sample_id <- in_sample
 #### Filter metadata based on cutoffs
 ```{r}
 stm("Filtering based on QC cutoffs")
-
+stm(paste("Before filtering:",nrow(meta),"barcodes"))
 filtered_meta <- meta
 for(i in seq_along(cutoffs)) {
   cut_name <- names(cutoffs)[i]
   cut_val <- cutoffs[[i]]
   filtered_meta <- filtered_meta[filtered_meta[[cut_name]] > cut_val]
 }
+stm(paste("After filtering:",nrow(filtered_meta),"barcodes"))
 ```
 
 [Return to Contents](#contents)
