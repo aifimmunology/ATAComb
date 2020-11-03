@@ -535,7 +535,7 @@ if(min(doublet_scores[[1]]$doubletEnrich) < 1) {
   
   filter_doublets <- TRUE
 } else {
-  stm("WARNING: Doublet Scoring failed - retaining all cells.")
+  stm("WARNING: DOUBLET SCORING FAILED - retaining all cells.")
   
   # Don't filter names and original barcodes
   archr_meta <- getCellColData(proj)
@@ -774,7 +774,8 @@ walk(seq_along(window_mat_files),
        out_file <- paste0(out_prefix, window_mat_name, ".h5")
        stm(paste("Writing .h5 file to:", out_file))
        write_h5_list(window_list,
-                     out_file)
+                     out_file,
+                     overwrite = TRUE)
        
        rm(window_list)
      })
