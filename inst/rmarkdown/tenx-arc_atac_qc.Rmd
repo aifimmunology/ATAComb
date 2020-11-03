@@ -177,9 +177,9 @@ if(!dir.exists(in_tenx)) {
   stm(paste0("ERROR: Cannot find IN 10x outputs:", in_tenx))
   stop()
 } else {
-  in_sin <- file.path(in_tenx, "singlecell.csv")
-  if(!file.exists(in_sin)) {
-    stm(paste0("ERROR: Cannot find 10x summary.csv:", in_sin))
+  in_pbm <- file.path(in_tenx, "per_barcode_metrics.csv")
+  if(!file.exists(in_pbm)) {
+    stm(paste0("ERROR: Cannot find 10x per_barcode_metrics.csv:", in_pbm))
     stop()
   }
   
@@ -189,9 +189,9 @@ if(!dir.exists(in_tenx)) {
     stm("WARNING: Some QC metrics will not be calculated")
   }
   
-  in_frag <- file.path(in_tenx, "fragments.tsv.gz")
+  in_frag <- file.path(in_tenx, "atac_fragments.tsv.gz")
   if(!file.exists(in_frag)) {
-    stm(paste0("ERROR: Cannot find 10x fragments.tsv.gz:", in_tenx))
+    stm(paste0("ERROR: Cannot find 10x atac_fragments.tsv.gz:", in_tenx))
     stop()
   }
 }
@@ -396,15 +396,15 @@ out_prefix <- file.path(out_dir, paste0(in_batch, "_", in_sample, "_"))
 
 #### Read metadata sources
 ```{r}
-stm(paste0("Reading 10x metadata from ", in_sin))
+stm(paste0("Reading 10x metadata from ", in_pbm))
 
-if(grepl("singlecell.csv", in_sin)) {
-  tenx_meta <- fread(in_sin)[-1,]
-  tenx_meta <- tenx_meta[, list(barcode, total, duplicate,mitochondrial , passed_filters)]
+if(grepl("per_barcode_metrics.csv", in_pbm)) {
+  tenx_meta <- fread(in_pbm)
+  tenx_meta <- tenx_meta[, list(barcode, atac_raw_reads, atac_dup_reads, atac_mitochondrial_reads, atac_fragments)]
   names(tenx_meta) <- c("original_barcodes","n_fragments","n_duplicate","n_mito","n_unique")
-} else if(grepl("barcode_counts.tsv", in_sin)) {
+} else if(grepl("barcode_counts.tsv", in_pbm)) {
   stm("Using barcode_counts.tsv")
-  tenx_meta <- fread(in_sin)
+  tenx_meta <- fread(in_pbm)
   names(tenx_meta) <- c("original_barcodes", "n_fragments")
   tenx_meta$n_unique <- tenx_meta$n_fragments
 }
@@ -456,13 +456,14 @@ meta$pbmc_sample_id <- in_sample
 #### Filter metadata based on cutoffs
 ```{r}
 stm("Filtering based on QC cutoffs")
-
+stm(paste("Before filtering:",nrow(meta),"barcodes"))
 filtered_meta <- meta
 for(i in seq_along(cutoffs)) {
   cut_name <- names(cutoffs)[i]
   cut_val <- cutoffs[[i]]
   filtered_meta <- filtered_meta[filtered_meta[[cut_name]] > cut_val]
 }
+stm(paste("After filtering:",nrow(filtered_meta),"barcodes"))
 ```
 
 [Return to Contents](#contents)
@@ -480,6 +481,7 @@ valid_barcodes <- SimpleList(valid_barcodes)
 
 ArrowFile <- createArrowFiles(inputFiles = in_frag,
                               sampleNames = in_sample,
+                              outputNames = in_sample,
                               validBarcodes = valid_barcodes,
                               filterFrags = 500,
                               filterTSS = 0,
@@ -502,7 +504,6 @@ proj <- ArchRProject(ArrowFiles = ArrowFile,
 proj_ArrowFile <- getArrowFiles(proj)
 stm(paste0("ArchR: Project ArrowFile located at ", proj_ArrowFile))
 ```
-
 
 ```{r}
 # Store unfiltered names for later
@@ -764,7 +765,8 @@ walk(seq_along(window_mat_files),
        out_file <- paste0(out_prefix, window_mat_name, ".h5")
        stm(paste("Writing .h5 file to:", out_file))
        write_h5_list(window_list,
-                     out_file)
+                     out_file,
+                     overwrite = TRUE)
        
        rm(window_list)
      })
@@ -848,13 +850,15 @@ qc_table(barcode_qc_stats)
 if(file.exists(in_sum)) {
   metrics_summary <- read.csv(in_sum)
   
+  metrics_summary$total_usable_fragments <- floor(metrics_summary$ATAC.Sequenced.read.pairs * metrics_summary$ATAC.Confidently.mapped.read.pairs * metrics_summary$ATAC.Fraction.of.high.quality.fragments.in.cells)
+  
   saturation_counts <- fread(paste0(in_prefix, "_saturation_curve.tsv.gz"),
                              header = F,
                              col.names = c("count", "frequency"))
   saturation_counts$count <- as.numeric(sub("\\r","",saturation_counts$count))
   
   fragment_qc_stats <- data.frame(metric = c("Sequenced Fragments",
-                                             "Mitochondrial Fragments",
+                                             #"Mitochondrial Fragments",
                                              "Total in Barcodes with > 1k Reads",
                                              "Total in Barcodes passing QC",
                                              "Total in Barcodes failing QC",
@@ -862,8 +866,8 @@ if(file.exists(in_sum)) {
                                              "Unique in Barcodes with > 1k Reads",
                                              "Unique in Barcodes passing QC",
                                              "Unique in Barcodes failing QC"),
-                                  count = c(metrics_summary$num_fragments,
-                                            ceiling(metrics_summary$num_fragments * metrics_summary$frac_waste_mitochondrial),
+                                  count = c(metrics_summary$ATAC.Sequenced.read.pairs,
+                                            #ceiling(metrics_summary$ATAC.Sequenced.read.pairs * metrics_summary$frac_waste_mitochondrial),
                                             sum(meta$n_fragments),
                                             sum(filtered_meta$n_fragments),
                                             sum(meta$n_fragments) - sum(filtered_meta$n_fragments),
@@ -877,7 +881,7 @@ if(file.exists(in_sum)) {
   fragment_qc_stats$percent_of_unique[1:5] <- NA
   
   qc_list$fragment_qc_stats <- as.list(fragment_qc_stats)
-  qc_list$fragment_qc_stats$metric <- c("total_frags","mito_frags",
+  qc_list$fragment_qc_stats$metric <- c("total_frags",#"mito_frags",
                                         "total_frags_gt1k","total_frags_pass_qc","total_frags_fail_qc",
                                         "unique_frags","unique_frags_gt1k","unique_frags_pass_qc","unique_frags_fail_qc")
 } else {
@@ -915,7 +919,7 @@ if(file.exists(in_sum)) {
   
   saturation_mat <- as.matrix(as.data.frame(saturation_counts))
   
-  total_metrics <- data.frame(total_reads = metrics_summary$num_fragments,
+  total_metrics <- data.frame(total_reads = metrics_summary$ATAC.Sequenced.read.pairs,
                               total_umis = metrics_summary$total_usable_fragments,
                               total_counts = sum(saturation_mat[,"count"] * saturation_mat[,"frequency"]))
   
