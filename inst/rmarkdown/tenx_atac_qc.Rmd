@@ -501,25 +501,28 @@ proj <- ArchRProject(ArrowFiles = ArrowFile,
 
 proj_ArrowFile <- getArrowFiles(proj)
 stm(paste0("ArchR: Project ArrowFile located at ", proj_ArrowFile))
+```
 
+
+```{r}
 # Store unfiltered names for later
 unfiltered_archr_names <- getCellNames(proj)
 
 # Check for doublet scoring
 # This will be FALSE in the case of small test datasets
-if(min(doublet_scores[[1]]$doubletEnrich < 1)) {
+if(min(doublet_scores[[1]]$doubletEnrich) < 1) {
   # Remove doublets
   proj <- filterDoublets(proj)
   
   # Get filtered names and original barcodes
   archr_meta <- getCellColData(proj)
-  filtered_archr_names <- rownames(archr_meta)[archr_meta$DoubletEnrichment < 1]
+  filtered_archr_names <- rownames(archr_meta)
   filtered_archr_barcodes <- sub(".+#","",filtered_archr_names)
   archr_meta <- archr_meta[filtered_archr_names,]
   
   filter_doublets <- TRUE
 } else {
-  stm("WARNING: Doublet Scoring failed - retaining all cells.")
+  stm("WARNING: DOUBLET SCORING FAILED - retaining all cells.")
   
   # Don't filter names and original barcodes
   archr_meta <- getCellColData(proj)
@@ -536,6 +539,9 @@ if(min(doublet_scores[[1]]$doubletEnrich < 1)) {
 n_pre_doublet_filter <- nrow(filtered_meta)
 
 stm(paste0("ArchR: Total barcodes = ",n_pre_doublet_filter))
+
+meta <- meta %>%
+  dplyr::mutate(singlet = original_barcodes %in% filtered_archr_barcodes)
 
 filtered_meta <- filtered_meta %>%
   dplyr::filter(original_barcodes %in% filtered_archr_barcodes)
@@ -787,19 +793,17 @@ out_json <- paste0(out_prefix, "atac_qc_metrics.json")
 
 #### Barcode QC Stats
 ```{r}
-barcode_conditions <- list("all" = rep(TRUE, nrow(meta)),
-                           "singlets" = ifelse(n_post_doublet_filter > 0,
-                                               rep(TRUE, n_post_doublet_filter),
-                                               FALSE),
-                           "doublets" = ifelse(n_doublets > 0, 
-                                               rep(TRUE, n_doublets), 
-                                               FALSE),
-                           "pass_qc" = meta$altius_frac > cutoffs$altius_frac & meta$peaks_frac > cutoffs$peaks_frac & meta$tss_frac > cutoffs$tss_frac,
-                           "fail_qc" = meta$altius_frac < cutoffs$altius_frac | meta$peaks_frac < cutoffs$peaks_frac | meta$tss_frac < cutoffs$tss_frac,
-                           "fail_altius_frac" = meta$altius_frac < cutoffs$altius_frac,
-                           "fail_peaks_frac" = meta$peaks_frac < cutoffs$peaks_frac,
-                           "fail_tss_frac" = meta$tss_frac < cutoffs$tss_frac,
-                           "fail_all" = meta$altius_frac < cutoffs$altius_frac & meta$peaks_frac < cutoffs$peaks_frac & meta$tss_frac < cutoffs$tss_frac)
+barcode_conditions <- list(
+  "all" = rep(TRUE, nrow(meta)),
+  "pass_qc" = meta$altius_frac > cutoffs$altius_frac & meta$peaks_frac > cutoffs$peaks_frac & meta$tss_frac > cutoffs$tss_frac,
+  "fail_qc" = meta$altius_frac < cutoffs$altius_frac | meta$peaks_frac < cutoffs$peaks_frac | meta$tss_frac < cutoffs$tss_frac,
+  "fail_altius_frac" = meta$altius_frac < cutoffs$altius_frac,
+  "fail_peaks_frac" = meta$peaks_frac < cutoffs$peaks_frac,
+  "fail_tss_frac" = meta$tss_frac < cutoffs$tss_frac,
+  "fail_all" = meta$altius_frac < cutoffs$altius_frac & meta$peaks_frac < cutoffs$peaks_frac & meta$tss_frac < cutoffs$tss_frac,
+  "doublets" = meta$altius_frac > cutoffs$altius_frac & meta$peaks_frac > cutoffs$peaks_frac & meta$tss_frac > cutoffs$tss_frac & !meta$singlet,
+  "singlets" = meta$altius_frac > cutoffs$altius_frac & meta$peaks_frac > cutoffs$peaks_frac & meta$tss_frac > cutoffs$tss_frac & meta$singlet
+)
 
 perc_of <- function(x, d) {
   round(sum(x) / d * 100, 2)
@@ -810,22 +814,23 @@ q_of <- function(x, target, q) {
   round(quantile(vals, probs = q), 4)
 }
 
-barcode_qc_stats <- data.frame(metric = c("Barcodes with > 1k reads",
-                                          "Barcodes from Singlets",
-                                          "Barcodes from Doublets",
-                                          "Barcodes pass QC",
-                                          "Barcodes fail QC",
-                                          "Barcodes fail altius_frac",
-                                          "Barcodes fail peaks_frac",
-                                          "Barcodes fail tss_frac",
-                                          "Barcodes fail all"),
-                               count = sapply(barcode_conditions, sum),
-                               percent = sapply(barcode_conditions, perc_of, nrow(meta)),
-                               median_fragments = sapply(barcode_conditions, q_of, meta$n_fragments, .50),
-                               median_unique = sapply(barcode_conditions, q_of, meta$n_unique, .50),
-                               median_altius_frac = sapply(barcode_conditions, q_of, meta$altius_frac, .50),
-                               median_peaks_frac = sapply(barcode_conditions, q_of, meta$peaks_frac, .50),
-                               median_tss_frac = sapply(barcode_conditions, q_of, meta$tss_frac, .50))
+barcode_qc_stats <- data.frame(
+  metric = c("Barcodes with > 1k reads",
+             "Barcodes pass QC",
+             "Barcodes fail QC",
+             "Barcodes fail altius_frac",
+             "Barcodes fail peaks_frac",
+             "Barcodes fail tss_frac",
+             "Barcodes fail all",
+             "Doublets pass QC",
+             "Singlets pass QC"),
+  count = sapply(barcode_conditions, sum),
+  percent = sapply(barcode_conditions, perc_of, nrow(meta)),
+  median_fragments = sapply(barcode_conditions, q_of, meta$n_fragments, .50),
+  median_unique = sapply(barcode_conditions, q_of, meta$n_unique, .50),
+  median_altius_frac = sapply(barcode_conditions, q_of, meta$altius_frac, .50),
+  median_peaks_frac = sapply(barcode_conditions, q_of, meta$peaks_frac, .50),
+  median_tss_frac = sapply(barcode_conditions, q_of, meta$tss_frac, .50))
 
 qc_list$barcode_qc_stats <- as.list(barcode_qc_stats)
 qc_list$barcode_qc_stats$metric <- c("barcodes_gt1k","barcodes_pass_qc","barcodes_fail_qc",

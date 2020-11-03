@@ -816,22 +816,23 @@ q_of <- function(x, target, q) {
   round(quantile(vals, probs = q), 4)
 }
 
-barcode_qc_stats <- data.frame(metric = c("Barcodes with > 1k reads",
-                                          "Barcodes pass QC",
-                                          "Barcodes fail QC",
-                                          "Barcodes fail altius_frac",
-                                          "Barcodes fail peaks_frac",
-                                          "Barcodes fail tss_frac",
-                                          "Barcodes fail all",
-                                          "Doublets pass QC",
-                                          "Singlets pass QC"),
-                               count = sapply(barcode_conditions, sum),
-                               percent = sapply(barcode_conditions, perc_of, nrow(meta)),
-                               median_fragments = sapply(barcode_conditions, q_of, meta$n_fragments, .50),
-                               median_unique = sapply(barcode_conditions, q_of, meta$n_unique, .50),
-                               median_altius_frac = sapply(barcode_conditions, q_of, meta$altius_frac, .50),
-                               median_peaks_frac = sapply(barcode_conditions, q_of, meta$peaks_frac, .50),
-                               median_tss_frac = sapply(barcode_conditions, q_of, meta$tss_frac, .50))
+barcode_qc_stats <- data.frame(
+  metric = c("Barcodes with > 1k reads",
+             "Barcodes pass QC",
+             "Barcodes fail QC",
+             "Barcodes fail altius_frac",
+             "Barcodes fail peaks_frac",
+             "Barcodes fail tss_frac",
+             "Barcodes fail all",
+             "Doublets pass QC",
+             "Singlets pass QC"),
+  count = sapply(barcode_conditions, sum),
+  percent = sapply(barcode_conditions, perc_of, nrow(meta)),
+  median_fragments = sapply(barcode_conditions, q_of, meta$n_fragments, .50),
+  median_unique = sapply(barcode_conditions, q_of, meta$n_unique, .50),
+  median_altius_frac = sapply(barcode_conditions, q_of, meta$altius_frac, .50),
+  median_peaks_frac = sapply(barcode_conditions, q_of, meta$peaks_frac, .50),
+  median_tss_frac = sapply(barcode_conditions, q_of, meta$tss_frac, .50))
 
 qc_list$barcode_qc_stats <- as.list(barcode_qc_stats)
 qc_list$barcode_qc_stats$metric <- c("barcodes_gt1k","barcodes_pass_qc","barcodes_fail_qc",
