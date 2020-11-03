@@ -529,7 +529,7 @@ if(min(doublet_scores[[1]]$doubletEnrich) < 1) {
   
   # Get filtered names and original barcodes
   archr_meta <- getCellColData(proj)
-  filtered_archr_names <- rownames(archr_meta)[archr_meta$DoubletEnrichment < 1]
+  filtered_archr_names <- rownames(archr_meta)
   filtered_archr_barcodes <- sub(".+#","",filtered_archr_names)
   archr_meta <- archr_meta[filtered_archr_names,]
   
