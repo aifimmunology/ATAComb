@@ -139,18 +139,6 @@ stm(paste0("IN  Window Sizes     : ", window_sizes))
 stm(paste0("OUT Directory        : ", out_dir))
 ```
 
-```{r}
-in_pre <- "/mnt/x060-multiome/X061-pipeline-analysis/preprocessed/"
-in_tenx <- "/mnt/x060-multiome/X061-Well1/outs/"
-in_key <- "/mnt/x060-multiome/X061-pipeline-analysis/X061_SampleSheet.csv"
-in_well <- "X061-AP0C1W1"
-genome <- "hg38"
-refs <- "altius,tss,gene_bodies"
-window_sizes <- "window_5k"
-out_dir <- "/mnt/x060-multiome/X061-pipeline-analysis/atac_qc/"
-```
-
-
 #### Input Parameters
 ```{r Print Arguments}
 print(c(
@@ -553,6 +541,9 @@ n_pre_doublet_filter <- nrow(filtered_meta)
 
 stm(paste0("ArchR: Total barcodes = ",n_pre_doublet_filter))
 
+meta <- meta %>%
+  dplyr::mutate(singlet = original_barcodes %in% filtered_archr_barcodes)
+
 filtered_meta <- filtered_meta %>%
   dplyr::filter(original_barcodes %in% filtered_archr_barcodes)
 
@@ -804,19 +795,17 @@ out_json <- paste0(out_prefix, "atac_qc_metrics.json")
 
 #### Barcode QC Stats
 ```{r}
-barcode_conditions <- list("all" = rep(TRUE, nrow(meta)),
-                           "singlets" = ifelse(n_post_doublet_filter > 0,
-                                               rep(TRUE, n_post_doublet_filter),
-                                               FALSE),
-                           "doublets" = ifelse(n_doublets > 0, 
-                                               rep(TRUE, n_doublets), 
-                                               FALSE),
-                           "pass_qc" = meta$altius_frac > cutoffs$altius_frac & meta$peaks_frac > cutoffs$peaks_frac & meta$tss_frac > cutoffs$tss_frac,
-                           "fail_qc" = meta$altius_frac < cutoffs$altius_frac | meta$peaks_frac < cutoffs$peaks_frac | meta$tss_frac < cutoffs$tss_frac,
-                           "fail_altius_frac" = meta$altius_frac < cutoffs$altius_frac,
-                           "fail_peaks_frac" = meta$peaks_frac < cutoffs$peaks_frac,
-                           "fail_tss_frac" = meta$tss_frac < cutoffs$tss_frac,
-                           "fail_all" = meta$altius_frac < cutoffs$altius_frac & meta$peaks_frac < cutoffs$peaks_frac & meta$tss_frac < cutoffs$tss_frac)
+barcode_conditions <- list(
+  "all" = rep(TRUE, nrow(meta)),
+  "pass_qc" = meta$altius_frac > cutoffs$altius_frac & meta$peaks_frac > cutoffs$peaks_frac & meta$tss_frac > cutoffs$tss_frac,
+  "fail_qc" = meta$altius_frac < cutoffs$altius_frac | meta$peaks_frac < cutoffs$peaks_frac | meta$tss_frac < cutoffs$tss_frac,
+  "fail_altius_frac" = meta$altius_frac < cutoffs$altius_frac,
+  "fail_peaks_frac" = meta$peaks_frac < cutoffs$peaks_frac,
+  "fail_tss_frac" = meta$tss_frac < cutoffs$tss_frac,
+  "fail_all" = meta$altius_frac < cutoffs$altius_frac & meta$peaks_frac < cutoffs$peaks_frac & meta$tss_frac < cutoffs$tss_frac,
+  "doublets" = meta$altius_frac > cutoffs$altius_frac & meta$peaks_frac > cutoffs$peaks_frac & meta$tss_frac > cutoffs$tss_frac & !meta$singlet,
+  "singlets" = meta$altius_frac > cutoffs$altius_frac & meta$peaks_frac > cutoffs$peaks_frac & meta$tss_frac > cutoffs$tss_frac & meta$singlet
+)
 
 perc_of <- function(x, d) {
   round(sum(x) / d * 100, 2)
@@ -828,14 +817,14 @@ q_of <- function(x, target, q) {
 }
 
 barcode_qc_stats <- data.frame(metric = c("Barcodes with > 1k reads",
-                                          "Barcodes from Singlets",
-                                          "Barcodes from Doublets",
                                           "Barcodes pass QC",
                                           "Barcodes fail QC",
                                           "Barcodes fail altius_frac",
                                           "Barcodes fail peaks_frac",
                                           "Barcodes fail tss_frac",
-                                          "Barcodes fail all"),
+                                          "Barcodes fail all",
+                                          "Doublets pass QC",
+                                          "Singlets pass QC"),
                                count = sapply(barcode_conditions, sum),
                                percent = sapply(barcode_conditions, perc_of, nrow(meta)),
                                median_fragments = sapply(barcode_conditions, q_of, meta$n_fragments, .50),
@@ -860,13 +849,15 @@ qc_table(barcode_qc_stats)
 if(file.exists(in_sum)) {
   metrics_summary <- read.csv(in_sum)
   
+  metrics_summary$total_usable_fragments <- floor(metrics_summary$ATAC.Sequenced.read.pairs * metrics_summary$ATAC.Confidently.mapped.read.pairs * metrics_summary$ATAC.Fraction.of.high.quality.fragments.in.cells)
+  
   saturation_counts <- fread(paste0(in_prefix, "_saturation_curve.tsv.gz"),
                              header = F,
                              col.names = c("count", "frequency"))
   saturation_counts$count <- as.numeric(sub("\\r","",saturation_counts$count))
   
   fragment_qc_stats <- data.frame(metric = c("Sequenced Fragments",
-                                             "Mitochondrial Fragments",
+                                             #"Mitochondrial Fragments",
                                              "Total in Barcodes with > 1k Reads",
                                              "Total in Barcodes passing QC",
                                              "Total in Barcodes failing QC",
@@ -874,8 +865,8 @@ if(file.exists(in_sum)) {
                                              "Unique in Barcodes with > 1k Reads",
                                              "Unique in Barcodes passing QC",
                                              "Unique in Barcodes failing QC"),
-                                  count = c(metrics_summary$num_fragments,
-                                            ceiling(metrics_summary$num_fragments * metrics_summary$frac_waste_mitochondrial),
+                                  count = c(metrics_summary$ATAC.Sequenced.read.pairs,
+                                            #ceiling(metrics_summary$ATAC.Sequenced.read.pairs * metrics_summary$frac_waste_mitochondrial),
                                             sum(meta$n_fragments),
                                             sum(filtered_meta$n_fragments),
                                             sum(meta$n_fragments) - sum(filtered_meta$n_fragments),
@@ -889,7 +880,7 @@ if(file.exists(in_sum)) {
   fragment_qc_stats$percent_of_unique[1:5] <- NA
   
   qc_list$fragment_qc_stats <- as.list(fragment_qc_stats)
-  qc_list$fragment_qc_stats$metric <- c("total_frags","mito_frags",
+  qc_list$fragment_qc_stats$metric <- c("total_frags",#"mito_frags",
                                         "total_frags_gt1k","total_frags_pass_qc","total_frags_fail_qc",
                                         "unique_frags","unique_frags_gt1k","unique_frags_pass_qc","unique_frags_fail_qc")
 } else {
@@ -927,7 +918,7 @@ if(file.exists(in_sum)) {
   
   saturation_mat <- as.matrix(as.data.frame(saturation_counts))
   
-  total_metrics <- data.frame(total_reads = metrics_summary$num_fragments,
+  total_metrics <- data.frame(total_reads = metrics_summary$ATAC.Sequenced.read.pairs,
                               total_umis = metrics_summary$total_usable_fragments,
                               total_counts = sum(saturation_mat[,"count"] * saturation_mat[,"frequency"]))
   
