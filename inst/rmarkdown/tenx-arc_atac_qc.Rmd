@@ -139,6 +139,18 @@ stm(paste0("IN  Window Sizes     : ", window_sizes))
 stm(paste0("OUT Directory        : ", out_dir))
 ```
 
+```{r}
+in_pre <- "/mnt/x060-multiome/X061-pipeline-analysis/preprocessed/"
+in_tenx <- "/mnt/x060-multiome/X061-Well1/outs/"
+in_key <- "/mnt/x060-multiome/X061-pipeline-analysis/X061_SampleSheet.csv"
+in_well <- "X061-AP0C1W1"
+genome <- "hg38"
+refs <- "altius,tss,gene_bodies"
+window_sizes <- "window_5k"
+out_dir <- "/mnt/x060-multiome/X061-pipeline-analysis/atac_qc/"
+```
+
+
 #### Input Parameters
 ```{r Print Arguments}
 print(c(
@@ -503,13 +515,15 @@ proj <- ArchRProject(ArrowFiles = ArrowFile,
 
 proj_ArrowFile <- getArrowFiles(proj)
 stm(paste0("ArchR: Project ArrowFile located at ", proj_ArrowFile))
+```
 
+```{r}
 # Store unfiltered names for later
 unfiltered_archr_names <- getCellNames(proj)
 
 # Check for doublet scoring
 # This will be FALSE in the case of small test datasets
-if(min(doublet_scores[[1]]$doubletEnrich < 1)) {
+if(min(doublet_scores[[1]]$doubletEnrich) < 1) {
   # Remove doublets
   proj <- filterDoublets(proj)
   
