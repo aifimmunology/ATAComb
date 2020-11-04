@@ -211,13 +211,6 @@ proj <- addClusters(input = proj,
 ```
 
 ```{r}
-stm("ArchR: Adding UMAP")
-proj <- addUMAP(ArchRProj = proj,
-                reducedDims = "IterativeLSI")
-umap_dims <- as.data.frame(getEmbedding(proj, "UMAP", returnDF = TRUE))
-```
-
-```{r}
 stm("ArchR: Running Unconstrained Integration")
 outDir <- temp_dir
 proj <- addGeneIntegrationMatrix(ArchRProj = proj,
@@ -339,9 +332,9 @@ if(run_co) {
   )
   constrained_integration <- TRUE
 } else {
-  proj$co_pred_group <- proj$un_pred_group
-  proj$co_pred_score <- proj$un_pred_score
-  proj$co_pred_type <- proj$un_pred_type
+  proj <- addCellColData(proj, proj$un_pred_type, "co_pred_type", getCellNames(proj), force = TRUE)
+  proj <- addCellColData(proj, proj$un_pred_group, "co_pred_group", getCellNames(proj), force = TRUE)
+  proj <- addCellColData(proj, proj$un_pred_score, "co_pred_score", getCellNames(proj), force = TRUE)
   constrained_integration <- FALSE
 }
 ```
@@ -368,6 +361,24 @@ label_map
 proj$seurat_pbmc_type <- mapLabels(proj$Clusters, 
                                    newLabels = label_map, 
                                    oldLabels = old_labels)
+```
+
+```{r}
+stm("ArchR: Adding UMAP")
+if(cell_padding) {
+  proj <- addIterativeLSI(ArchRProj = proj,
+                          force = TRUE)
+  proj <- addUMAP(ArchRProj = proj,
+                  saveModel = FALSE,
+                  reducedDims = "IterativeLSI")
+} else {
+  proj <- addUMAP(ArchRProj = proj,
+                  reducedDims = "IterativeLSI",
+                  saveModel = FALSE)
+}
+
+
+umap_dims <- as.data.frame(getEmbedding(proj, "UMAP", returnDF = TRUE))
 ```
 
 ```{r}
