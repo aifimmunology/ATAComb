@@ -70,7 +70,7 @@ stm("Starting Batch Report")
 ```{r Parse arguments}
 if(is.null(params$in_dir)) {
   in_dir <- system.file("testdata/batch_qc", package = "ATAComb")
-  batch_id <- "X000"
+  batch_id <- "X055"
   out_dir <- tempdir()
 } else {
   in_dir <- params$in_dir
@@ -116,6 +116,12 @@ if(length(meta_files) == 0) {
   stop("Can't find unfiltered metadata files. Check input directory for *_all_metadata.csv.gz files.")
 }
 
+stm("IN Full Metadata Files:")
+for(meta_file in meta_files) {
+  stm(meta_file)
+  print(meta_file)
+}
+
 meta_list <- map(meta_files, fread)
 sample_names <- sub(".+/","",sub("_all_metadata.csv.gz","",meta_files))
 names(meta_list) <- sample_names
@@ -131,6 +137,12 @@ if(length(filt_meta_files) < length(meta_files)) {
   stop("Can't find filtered metadata files. Check input directory for *_filtered_metadata.csv.gz files.")
 } else if(length(filt_meta_files) > length(meta_files)) {
   stop("Can't find all metadata files. Check input directory for *_all_metadata.csv.gz files.")
+}
+
+stm("IN Filtered Metadata Files:")
+for(filt_meta_file in filt_meta_files) {
+  stm(filt_meta_file)
+  print(filt_meta_file)
 }
 
 filt_meta_list <- map(filt_meta_files, fread)
@@ -150,6 +162,12 @@ if(length(sat_files) < length(meta_files)) {
   stop("Can't find all metadata files. Check input directory for *_all_metadata.csv.gz files.")
 }
 
+stm("IN Saturation Projection Files:")
+for(sat_file in sat_files) {
+  stm(sat_file)
+  print(sat_file)
+}
+
 names(sat_files) <- sub(".+/","",sub("_saturation_projection.csv.gz","",sat_files))
 sat_files <- sat_files[sample_names]
 
@@ -166,6 +184,12 @@ if(length(width_files) < length(meta_files)) {
   stop("Can't find all fragment width files. Check input directory for *_fragment_width_summary.csv.gz files.")
 } else if(length(sat_files) > length(meta_files)) {
   stop("Can't find all metadata files. Check input directory for *_all_metadata.csv.gz files.")
+}
+
+stm("IN Fragment Width Summary Files:")
+for(width_file in width_files) {
+  stm(width_file)
+  print(width_file)
 }
 
 names(width_files) <- sub(".+/","",sub("_fragment_width_summary.csv.gz","",width_files))
@@ -197,6 +221,9 @@ for(i in seq_along(cutoffs)) {
 
 meta$filtered <- meta$barcodes %in% filtered_meta$barcodes
 meta$mito_frac <- meta$n_mito / meta$n_fragments
+meta$well_label <- paste0(meta$well_id, "\n", meta$pbmc_sample_id)
+
+well_samples <- unique(meta[,c("well_id","pbmc_sample_id","well_label")])
 ```
 
 #### Filter metadata based on cutoffs
@@ -210,6 +237,10 @@ for(i in seq_along(cutoffs)) {
   filtered_meta <- filtered_meta[filtered_meta[[cut_name]] > cut_val]
   filtered_meta <- filtered_meta[filtered_meta$filtered,]
 }
+
+filtered_meta$well_label <- paste0(filtered_meta$well_id, "\n", filtered_meta$pbmc_sample_id)
+
+well_filtered_meta_list <- split(filtered_meta, filtered_meta$well_id)
 ```
 
 Set up global metadata for reporting
@@ -249,7 +280,7 @@ barcode_counts <- meta[,.(n_barcodes = nrow(.SD),
                             pass_singlets = sum(.SD$barcode_category == "pass_singlet"),
                             pass_doublets = sum(.SD$barcode_category == "pass_doublet"),
                             percent_doublets = round(sum(.SD$barcode_category == "pass_doublet")/sum(.SD$pass_fail == "pass")*100,2)),
-                         well_id]
+                         .(well_id,pbmc_sample_id)]
 
 qc_list$barcode_stats <- as.list(barcode_counts)
 
@@ -258,7 +289,7 @@ qc_table(barcode_counts)
 
 ```{r}
 qc_stacked_barplot(meta,
-                   category_x = "well_id",
+                   category_x = "well_label",
                    name_x = "Well ID",
                    category_y = "barcode_category",
                    category_name = "Barcode Category",
@@ -267,7 +298,7 @@ qc_stacked_barplot(meta,
 
 ```{r}
 qc_aligned_barplot(meta,
-                   category_x = "well_id",
+                   category_x = "well_label",
                    name_x = "Well ID",
                    category_y = "barcode_category",
                    category_name = "Barcode Category")
@@ -279,6 +310,16 @@ qc_aligned_barplot(meta,
 
 #### Fragment QC stats
 
+Plot Settings
+```{r}
+n_grid_columns <- min(length(well_filtered_meta_list),4)
+n_grid_rows <- ceiling(length(well_filtered_meta_list)/4)
+
+grid_width <- n_grid_columns * 3
+grid_height <- n_grid_rows * 3
+```
+
+
 ```{r}
 fragment_stats <- filtered_meta[,.(n_singlets = nrow(.SD[.SD$filtered]),
                                    med_raw_frag = round(median(n_fragments),0),
@@ -288,7 +329,7 @@ fragment_stats <- filtered_meta[,.(n_singlets = nrow(.SD[.SD$filtered]),
                                    med_unique_frip = round(median(peaks_frac),4),
                                    med_unique_encode = round(median(altius_frac),4)
                                    ),
-                                well_id]
+                                .(well_id,pbmc_sample_id)]
 
 qc_list$fragment_stats <- as.list(fragment_stats)
 
@@ -308,7 +349,7 @@ category_reads_violins <- qc_violin_plot(meta,
                                          name_y = "Unique Fragments",
                                          fill = "dodgerblue")
 well_reads_violins <- qc_violin_plot(filtered_meta,
-                                     category_x = "well_id",
+                                     category_x = "well_label",
                                      name_x = "Well ID",
                                      column_y = "n_unique",
                                      name_y = "Unique Fragments (Singlets)",
@@ -336,7 +377,7 @@ category_mito_violins <- qc_violin_plot(meta,
                                          fill = "darkgreen",
                                         log_y = FALSE)
 well_mito_violins <- qc_violin_plot(filtered_meta,
-                                     category_x = "well_id",
+                                     category_x = "well_label",
                                      name_x = "Well ID",
                                      column_y = "mito_frac",
                                      name_y = "Fraction Mito. (Singlets)",
@@ -365,7 +406,7 @@ category_frip_violins <- qc_violin_plot(meta,
                                          fill = "orangered",
                                         log_y = FALSE)
 well_frip_violins <- qc_violin_plot(filtered_meta,
-                                     category_x = "well_id",
+                                     category_x = "well_label",
                                      name_x = "Well ID",
                                      column_y = "peaks_frac",
                                      name_y = "FRIP (Singlets)",
@@ -381,13 +422,9 @@ plot_grid(plotlist = frip_violin_list,
 ```
 
 #### Reads vs peaks_frac scatter
-```{r fig.width=12, fig.height = 6}
-well_ids <- unique(filtered_meta$well_id)
-n_wells <- length(well_ids)
-
-qc_scatter_list <- map(well_ids,
-                       function(well_id) {
-                         well_meta <- filtered_meta[filtered_meta$well_id == well_id,]
+```{r fig.width=grid_width, fig.height=grid_height}
+qc_scatter_list <- map(well_filtered_meta_list,
+                       function(well_meta) {
                          qc_scatter_plot(well_meta,
                                          column_x = "n_unique",
                                          name_x = "N Unique Fragments per Cell",
@@ -397,11 +434,13 @@ qc_scatter_list <- map(well_ids,
                                          show_targets = FALSE,
                                          color = "orangered") +
                            geom_vline(aes(xintercept = 2.5e3), linetype = "dashed", size = 0.2) +
-                           geom_hline(aes(yintercept = cutoffs$peaks_frac), linetype = "dashed", size = 0.2)
+                           geom_hline(aes(yintercept = cutoffs$peaks_frac), linetype = "dashed", size = 0.2) +
+                           ggtitle(well_meta$well_label[1])
                        })
 
 plot_grid(plotlist = qc_scatter_list,
-          ncol = min(n_wells, 4))
+          ncol = n_grid_columns,
+          nrow = n_grid_rows)
 ```
 
 [Return to Contents](#contents)
@@ -418,7 +457,7 @@ category_fritss_violins <- qc_violin_plot(meta,
                                          fill = "mediumorchid3",
                                         log_y = FALSE)
 well_fritss_violins <- qc_violin_plot(filtered_meta,
-                                     category_x = "well_id",
+                                     category_x = "well_label",
                                      name_x = "Well ID",
                                      column_y = "tss_frac",
                                      name_y = "FRITSS (Singlets)",
@@ -434,13 +473,9 @@ plot_grid(plotlist = fritss_violin_list,
 ```
 
 #### Reads vs tss_frac scatter
-```{r fig.width=12, fig.height = 6}
-well_ids <- unique(filtered_meta$well_id)
-n_wells <- length(well_ids)
-
-qc_scatter_list <- map(well_ids,
-                       function(well_id) {
-                         well_meta <- filtered_meta[filtered_meta$well_id == well_id,]
+```{r fig.width=grid_width, fig.height=grid_height}
+qc_scatter_list <- map(well_filtered_meta_list,
+                       function(well_meta) {
                          qc_scatter_plot(well_meta,
                                          column_x = "n_unique",
                                          name_x = "N Unique Fragments per Cell",
@@ -450,11 +485,13 @@ qc_scatter_list <- map(well_ids,
                                          show_targets = FALSE,
                                          color = "mediumorchid3") +
                            geom_vline(aes(xintercept = 2.5e3), linetype = "dashed", size = 0.2) +
-                           geom_hline(aes(yintercept = cutoffs$tss_frac), linetype = "dashed", size = 0.2)
+                           geom_hline(aes(yintercept = cutoffs$tss_frac), linetype = "dashed", size = 0.2) +
+                           ggtitle(well_meta$well_label[1])
                        })
 
 plot_grid(plotlist = qc_scatter_list,
-          ncol = min(n_wells, 4))
+          ncol = n_grid_columns,
+          nrow = n_grid_rows)
 ```
 
 [Return to Contents](#contents)
@@ -471,7 +508,7 @@ category_enc_violins <- qc_violin_plot(meta,
                                          fill = "darkred",
                                         log_y = FALSE)
 well_enc_violins <- qc_violin_plot(filtered_meta,
-                                     category_x = "well_id",
+                                     category_x = "well_label",
                                      name_x = "Well ID",
                                      column_y = "altius_frac",
                                      name_y = "FRIENCODE (Singlets)",
@@ -487,13 +524,9 @@ plot_grid(plotlist = enc_violin_list,
 ```
 
 #### Reads vs altius_frac scatter
-```{r fig.width=12, fig.height = 6}
-well_ids <- unique(filtered_meta$well_id)
-n_wells <- length(well_ids)
-
-qc_scatter_list <- map(well_ids,
-                       function(well_id) {
-                         well_meta <- filtered_meta[filtered_meta$well_id == well_id,]
+```{r fig.width=grid_width, fig.height=grid_height}
+qc_scatter_list <-map(well_filtered_meta_list,
+                       function(well_meta) {
                          qc_scatter_plot(well_meta,
                                          column_x = "n_unique",
                                          name_x = "N Unique Fragments per Cell",
@@ -503,11 +536,13 @@ qc_scatter_list <- map(well_ids,
                                          show_targets = FALSE,
                                          color = "darkred") +
                            geom_vline(aes(xintercept = 2.5e3), linetype = "dashed", size = 0.2) +
-                           geom_hline(aes(yintercept = cutoffs$altius_frac), linetype = "dashed", size = 0.2)
+                           geom_hline(aes(yintercept = cutoffs$altius_frac), linetype = "dashed", size = 0.2) +
+                           ggtitle(well_meta$well_label[1])
                        })
 
 plot_grid(plotlist = qc_scatter_list,
-          ncol = min(n_wells, 4))
+          ncol = n_grid_columns,
+          nrow = n_grid_rows)
 ```
 
 [Return to Contents](#contents)
@@ -519,7 +554,10 @@ plot_grid(plotlist = qc_scatter_list,
 all_sat <- map_dfr(1:length(sat_list),
                    function(x) {
                      sat <- sat_list[[x]]
-                     sat$well_id <- sub(".+_","",names(sat_list)[x])
+                     sat_pbmc_sample <- sub(paste0(batch_id,"_"),"",names(sat_list)[x])
+                     sat$pbmc_sample_id <- sat_pbmc_sample
+                     sat$well_id <- well_samples$well_id[well_samples$pbmc_sample_id == sat_pbmc_sample]
+                     sat$well_label <- well_samples$well_label[well_samples$pbmc_sample_id == sat_pbmc_sample]
                      sat
                    })
 ```
@@ -535,7 +573,7 @@ sat_cutoffs <- all_sat[,.(M_raw = max(.SD$M_raw_reads[.SD$type == "actual"]),
                           M_raw_2x_signal = .SD$M_raw_reads[which.min(abs(.SD$signal_ratio - 2))[1]],
                           M_raw_4x_signal = .SD$M_raw_reads[which.min(abs(.SD$signal_ratio - 4))[1]],
                           M_raw_8x_signal = .SD$M_raw_reads[which.min(abs(.SD$signal_ratio - 8))[1]]),
-                       well_id]
+                       .(well_id,pbmc_sample_id)]
 
 qc_list$saturation_stats <- as.list(sat_cutoffs)
 
@@ -543,7 +581,7 @@ qc_table(sat_cutoffs)
 ```
 
 #### Saturation of Unique Fragments
-```{r fig.width=12, fig.height = 6}
+```{r fig.width=grid_width, fig.height=grid_height}
 reference_projections <- fread(system.file("reference/saturation/reference_projections.csv",
                                            package = "ATAComb"))
 reference_projections$dataset <- paste0("ref_",reference_projections$dataset)
@@ -557,9 +595,9 @@ umi_saturation_plot <- ggplot() +
   geom_line(data = all_sat,
             aes(x = n_raw_reads,
                 y = expected_umis,
-                group = well_id,
+                group = well_label,
                 color = type),
-            size = 1)  +
+            size = 2)  +
   scale_color_brewer("Data Type",
                      type = "qual",
                      palette = 2) +
@@ -575,7 +613,7 @@ umi_saturation_plot <- ggplot() +
                      labels = seq(0, 500, by = 100)) +
   theme_bw() +
   theme(panel.grid.minor = element_blank()) +
-  facet_wrap(facets = vars(well_id), ncol = 4) +
+  facet_wrap(facets = vars(well_label), ncol = 4) +
   ggtitle("Saturation of All Unique Fragments")
 
 umi_saturation_plot
@@ -583,7 +621,7 @@ umi_saturation_plot
 
 #### Saturation of Signal Fragments
 Signal fragments are reads in Altius Index regions in barcodes passing QC
-```{r fig.width=12, fig.height = 6}
+```{r fig.width=grid_width, fig.height=grid_height}
 signal_saturation_plot <- ggplot() +
   geom_line(data = reference_projections,
             aes(x = n_raw_reads,
@@ -593,9 +631,9 @@ signal_saturation_plot <- ggplot() +
   geom_line(data = all_sat,
             aes(x = n_raw_reads,
                 y = signal_umis,
-                group = well_id,
+                group = well_label,
                 color = type),
-            size = 1)  +
+            size = 2)  +
   scale_color_brewer("Data Type",
                      type = "qual",
                      palette = 2) +
@@ -611,7 +649,7 @@ signal_saturation_plot <- ggplot() +
                      labels = seq(0, 200, by = 20)) +
   theme_bw() +
   theme(panel.grid.minor = element_blank()) +
-  facet_wrap(facets = vars(well_id), ncol = 4) +
+  facet_wrap(facets = vars(well_label), ncol = 4) +
   ggtitle("Saturation of Signal Fragments")
 
 signal_saturation_plot
@@ -621,12 +659,25 @@ signal_saturation_plot
 
 <a id="width_stats"></a>
 
+Plot Settings
+```{r}
+n_grid_columns <- min(length(well_filtered_meta_list),2)
+n_grid_rows <- ceiling(length(well_filtered_meta_list)/2)
+
+grid_width <- n_grid_columns * 4
+grid_height <- n_grid_rows * 2
+```
+
+
 #### Fragment Width Distributions
-```{r fig.width=12, fig.height = 6}
+```{r fig.width=grid_width, fig.height=grid_height}
 frag_widths <- map_dfr(1:length(width_list),
                    function(x) {
                      fw <- width_list[[x]]
-                     fw$well_id <- sub(".+_","",names(width_list)[x])
+                     fw_pbmc_sample <- sub(paste0(batch_id,"_"),"",names(width_list)[x])
+                     fw$pbmc_sample_id <- fw_pbmc_sample
+                     fw$well_id <- well_samples$well_id[well_samples$pbmc_sample_id == fw_pbmc_sample]
+                     fw$well_label <- well_samples$well_label[well_samples$pbmc_sample_id == fw_pbmc_sample]
                      fw
                    })
 
@@ -639,7 +690,7 @@ ggplot(data = frag_widths) +
                 color = pass_fail),
             size = 1) +
   xlim(0, 750) +
-  facet_wrap(vars(well_id), ncol = 2) +
+  facet_wrap(vars(well_label), ncol = 2) +
   theme_bw()
 ```
 
