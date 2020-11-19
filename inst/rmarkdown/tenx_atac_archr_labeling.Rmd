@@ -28,6 +28,11 @@ params:
 - [Fragment Metrics](#archr_label)
 - [Saturation Metrics](#archr_output)
 
+#### [QC Plots](#qc)
+- [By Cluster](#qc_cluster)
+- [By Unconstrained Type](#qc_un)
+- [By Constrained Type](#qc_co)
+
 [Write QC JSON](#json_out)
 
 #### [Session Info](#session_info)
@@ -386,6 +391,8 @@ plotEmbedding(proj,
               name = "seurat_pbmc_type")
 ```
 
+#### Cell Type Summary
+
 ```{r}
 all_types <- unique(rna_so@meta.data$celltype)
 
@@ -426,6 +433,202 @@ stm(paste0("Writing cell labels to ", out_table_path))
 fwrite(results,
        out_table_path)
 ```
+
+[Return to Contents](#contents)
+
+<a id="qc"></a>
+
+### QC Plots
+
+<a id="qc_cluster"></a>
+
+#### Cluster metrics
+
+```{r}
+proj_meta <- as.data.frame(getCellColData(proj))
+```
+
+```{r}
+qc_violin_plot(proj_meta,
+               category_x = "Clusters",
+               name_x = "Cluster ID",
+               column_y = "nFrags",
+               name_y = "log10(N Fragments per Cell)") +
+  ggtitle("ArchR Cluster vs N Unique Fragments")
+```
+
+```{r}
+qc_violin_plot(proj_meta,
+               category_x = "Clusters",
+               name_x = "Cluster ID",
+               column_y = "DoubletEnrichment",
+               name_y = "Doublet Enchrichment",
+               log_y = FALSE) +
+  ggtitle("ArchR Cluster vs Doublet Enrichment")
+```
+
+```{r}
+qc_violin_plot(proj_meta,
+               category_x = "Clusters",
+               name_x = "Cluster ID",
+               column_y = "PromoterRatio",
+               name_y = "Promoter Ratio",
+               log_y = FALSE) +
+  ggtitle("ArchR Cluster vs Promoter Ratio")
+```
+```{r}
+qc_violin_plot(proj_meta,
+               category_x = "Clusters",
+               name_x = "Cluster ID",
+               column_y = "TSSEnrichment",
+               name_y = "TSS Enrichment",
+               log_y = FALSE) +
+  ggtitle("ArchR Cluster vs TSS Enrichment")
+```
+
+```{r}
+qc_violin_plot(proj_meta,
+               category_x = "Clusters",
+               name_x = "Cluster ID",
+               column_y = "un_pred_score",
+               name_y = "Unconstrained Prediction Score",
+               log_y = FALSE) +
+  ggtitle("ArchR Cluster vs Unconstrained Score")
+```
+
+```{r}
+qc_violin_plot(proj_meta,
+               category_x = "Clusters",
+               name_x = "Cluster ID",
+               column_y = "co_pred_score",
+               name_y = "Constrained Prediction Score",
+               log_y = FALSE) +
+  ggtitle("ArchR Cluster vs Constrained Score")
+```
+
+[Return to Contents](#contents)
+
+<a id="qc_un"></a>
+
+#### Unconstrained Type Metrics
+
+```{r}
+qc_violin_plot(proj_meta,
+               category_x = "un_pred_group",
+               name_x = "Unconstrained Cell Type",
+               column_y = "nFrags",
+               name_y = "log10(N Fragments per Cell)",
+               fill = "orange") +
+  ggtitle("Unconstrained Type vs N Unique Fragments")
+```
+
+```{r}
+qc_violin_plot(proj_meta,
+               category_x = "un_pred_group",
+               name_x = "Unconstrained Cell Type",
+               column_y = "DoubletEnrichment",
+               name_y = "Doublet Enrichment",
+               log_y = FALSE,
+               fill = "orange")+
+  ggtitle("Unconstrained Type vs Doublet Enrichment")
+```
+
+```{r}
+qc_violin_plot(proj_meta,
+               category_x = "un_pred_group",
+               name_x = "Unconstrained Cell Type",
+               column_y = "PromoterRatio",
+               name_y = "Promoter Ratio",
+               log_y = FALSE,
+               fill = "orange")+
+  ggtitle("Unconstrained Type vs Promoter Ratio")
+```
+
+```{r}
+qc_violin_plot(proj_meta,
+               category_x = "un_pred_group",
+               name_x = "Unconstrained Cell Type",
+               column_y = "TSSEnrichment",
+               name_y = "TSS Enrichment",
+               log_y = FALSE,
+               fill = "orange") +
+  ggtitle("Unconstrained Type vs TSS Enrichment")
+```
+
+```{r}
+qc_violin_plot(proj_meta,
+               category_x = "un_pred_group",
+               name_x = "Cluster ID",
+               column_y = "un_pred_score",
+               name_y = "Unconstrained Prediction Score",
+               log_y = FALSE,
+               fill = "orange") +
+  ggtitle("Unconstrained Type vs Unconstrained Score")
+```
+
+
+[Return to Contents](#contents)
+
+<a id="qc_un"></a>
+
+#### Constrained Type Metrics
+
+```{r}
+qc_violin_plot(proj_meta,
+               category_x = "co_pred_group",
+               name_x = "Constrained Cell Type",
+               column_y = "nFrags",
+               name_y = "log10(N Fragments per Cell)",
+               fill = "limegreen") +
+  ggtitle("Constrained Type vs N Unique Fragments")
+```
+
+```{r}
+qc_violin_plot(proj_meta,
+               category_x = "co_pred_group",
+               name_x = "Constrained Cell Type",
+               column_y = "DoubletEnrichment",
+               name_y = "Doublet Enrichment",
+               log_y = FALSE,
+               fill = "limegreen")+
+  ggtitle("Constrained Type vs Doublet Enrichment")
+```
+
+```{r}
+qc_violin_plot(proj_meta,
+               category_x = "co_pred_group",
+               name_x = "Constrained Cell Type",
+               column_y = "PromoterRatio",
+               name_y = "Promoter Ratio",
+               log_y = FALSE,
+               fill = "limegreen")+
+  ggtitle("Constrained Type vs Promoter Ratio")
+```
+
+```{r}
+qc_violin_plot(proj_meta,
+               category_x = "co_pred_group",
+               name_x = "Constrained Cell Type",
+               column_y = "TSSEnrichment",
+               name_y = "TSS Enrichment",
+               log_y = FALSE,
+               fill = "limegreen") +
+  ggtitle("Constrained Type vs TSS Enrichment")
+```
+
+```{r}
+qc_violin_plot(proj_meta,
+               category_x = "co_pred_group",
+               name_x = "Cluster ID",
+               column_y = "co_pred_score",
+               name_y = "Constrained Prediction Score",
+               log_y = FALSE,
+               fill = "limegreen") +
+  ggtitle("Constrained Type vs Constrained Score")
+```
+[Return to Contents](#contents)
+
+#### Clean up Temp files
 
 ```{r}
 file.remove(temp_dir,
