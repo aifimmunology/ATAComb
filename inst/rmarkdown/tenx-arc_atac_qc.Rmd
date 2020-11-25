@@ -268,7 +268,7 @@ window_mat_names <- sub(paste0(in_prefix,"_"), "", window_mat_files)
 window_mat_names <- sub("_counts.tsv.gz","",window_mat_names)
 stm(paste(c("Available window matrices:", window_mat_names), collapse = " "))
 
-if(window_sizes == "all") {
+if(window_sizes[1] == "all") {
   stm("Using all Available window matrices")
   use_windows <- window_mat_names
 } else {
