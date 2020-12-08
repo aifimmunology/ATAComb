@@ -400,14 +400,14 @@ stm(paste0("Reading 10x metadata from ", in_pbm))
 
 if(grepl("per_barcode_metrics.csv", in_pbm)) {
   tenx_meta <- fread(in_pbm)
-  tenx_meta <- tenx_meta[, list(barcode, atac_raw_reads, atac_dup_reads, atac_mitochondrial_reads, atac_fragments)]
-  names(tenx_meta) <- c("original_barcodes","n_fragments","n_duplicate","n_mito","n_unique")
-} else if(grepl("barcode_counts.tsv", in_pbm)) {
-  stm("Using barcode_counts.tsv")
-  tenx_meta <- fread(in_pbm)
-  names(tenx_meta) <- c("original_barcodes", "n_fragments")
-  tenx_meta$n_unique <- tenx_meta$n_fragments
+  if(! "cell_uuid" %in% names(tenx_meta)) {
+    stop("arc qc requires addition of a cell_uuid. See 00_arc_uuid.sh in tenx-atacseq-pipeline.")
+  }
+  
+  tenx_meta <- tenx_meta[, list(barcode, atac_raw_reads, atac_dup_reads, atac_mitochondrial_reads, atac_fragments, cell_uuid)]
+  names(tenx_meta) <- c("original_barcodes","n_fragments","n_duplicate","n_mito","n_unique","cell_uuid")
 }
+
 
 stm(paste0("Reading reference counts from ", in_pre))
 
@@ -436,12 +436,14 @@ for(i in seq_along(ref_counts)) {
 ```{r Generate IDs}
 stm("Generating Cell IDs")
 
-meta$barcodes <- ids::uuid(nrow(meta),
-                           drop_hyphens = TRUE, 
-                           use_time = TRUE)
-meta$cell_name <- ids::adjective_animal(nrow(meta),
-                                        n_adjectives = 2,
-                                        max_len = 10)
+names(meta)[names(meta) == "cell_uuid"] <- "barcodes"
+
+meta$atac_cell_uuid <- ids::uuid(nrow(meta),
+                                 drop_hyphens = TRUE, 
+                                 use_time = TRUE)
+meta$atac_cell_name <- ids::adjective_animal(nrow(meta),
+                                             n_adjectives = 2,
+                                             max_len = 10)
 ```
 
 #### Add Well/Chip/Pool/Sample IDs
