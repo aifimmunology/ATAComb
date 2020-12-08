@@ -2,10 +2,11 @@
 #'
 #' TF-IDF is Term Frequency-Inverse Document Frequency.
 #'
-#' This function also includes log scaling, as suggested by Andrew Hill.
+#' This function includes log scaling, as suggested by Andrew Hill.
 #'
 #' @param atac_matrix A binary, dgCMatrix of overlaps between cells (columns) and peaks (rows).
 #' @param site_frequency_threshold A minimum threshold for the fraction of cells for which each peak must be positive to be retained. Ignored if idf is supplied.
+#' @param weight_threshold (optional) Threshold (>= site_frequency_threshold) to avoid over-weighting rare events. Default is equal to site_frequency_threshold.
 #' @param idf (optional) A precomputed, named numeric vector of IDF weights to apply to the data. Default is NULL, which uses the atac_matrix to compute IDF.
 #'
 #' @return a sparse matrix of filtered and scaled count values
@@ -13,14 +14,24 @@
 #'
 atac_tf_idf <- function(atac_matrix,
                         site_frequency_threshold = 0.03,
+                        weight_threshold = site_frequency_threshold,
                         idf = NULL) {
 
   cells_per_feature <- Matrix::rowSums(atac_matrix)
 
   if(is.null(idf)) {
-    threshold <- ncol(atac_matrix) * site_frequency_threshold
+    site_frequency <- cells_per_feature / ncol(atac_matrix)
 
-    filtered_matrix <- atac_matrix[cells_per_feature >= threshold,]
+    filtered_matrix <- atac_matrix[site_frequency >= site_frequency_threshold,]
+    filtered_site_frequency <- site_frequency[site_frequency >= site_frequency_threshold]
+
+    if(weight_threshold > site_frequency_threshold) {
+      filtered_weight_ratio <- weight_threshold / filtered_site_frequency
+      adjust_rows <- filtered_weight_ratio > 1
+
+      filtered_matrix[adjust_rows,] <- filtered_matrix[adjust_rows,] / filtered_weight_ratio[adjust_rows]
+    }
+
   } else {
     filtered_matrix <- atac_matrix[names(idf),]
   }
