@@ -4,8 +4,7 @@
 \alias{sparse_mat_chisq}
 \title{Chi-squared tests for rows of a sparse matrix}
 \usage{
-sparse_mat_chisq(mat, fg_cols, bg_cols = NULL, rows = NULL,
-  sort_on = "padj")
+sparse_mat_chisq(mat, fg_cols, bg_cols = NULL, rows = NULL, sort_on = "padj")
 }
 \arguments{
 \item{mat}{A sparse matrix with observations as columns and features as rows.}

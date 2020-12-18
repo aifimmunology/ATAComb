@@ -4,8 +4,7 @@
 \alias{max_column_cor}
 \title{Compare two matrices, and find the column in the second matrix with maximum correlation to each column in the first matrix}
 \usage{
-max_column_cor(query_mat, target_mat, method = "pearson",
-  n_threads = 1)
+max_column_cor(query_mat, target_mat, method = "pearson", n_threads = 1)
 }
 \arguments{
 \item{query_mat}{A matrix object to use as a query.}

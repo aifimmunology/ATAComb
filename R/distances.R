@@ -29,15 +29,17 @@ sparse_jaccard <-  function(m) {
 #'
 #' @param query_vec A binary vector object to use as a query.
 #' @param target_mat A dgCMatrix to use as targets (will be treated as binary).
-#' @param axis Either "row" or "col".
+#' @param axis Either "row" or "col". Default is "row".
+#' @param type distance Either "distance" or "similarity". distance is calculated as 1 - similarity. Default is "distance".
+#' @param direction Either "positive" or "negative". "positive" uses intersection / union; "negative" uses setdiff / union. Default is "positive".
 #'
-#' @return a vector of Jaccard distances between the query_vec and each row of the target_mat
+#' @return a vector of Jaccard values between the query_vec and each row of the target_mat
 #' @export
-feature_jaccard_distance <- function(query_vec, target_mat, axis = "row") {
-  #assertthat::assert_that(sum(class(query_vec) %in% c("numeric","integer") > 0))
-  #assertthat::assert_that("dgCMatrix" %in% class(target_mat))
-  #assertthat::assert_that(class(axis) == "character")
-  #assertthat::assert_that(length(axis) == 1)
+feature_jaccard <- function(query_vec,
+                            target_mat,
+                            axis = "row",
+                            type = "distance",
+                            direction = "positive") {
 
   match.arg(axis, c("col","row"))
 
@@ -51,12 +53,42 @@ feature_jaccard_distance <- function(query_vec, target_mat, axis = "row") {
   il <- split(target_mat@i, rep(1:ncol(target_mat), diff(target_mat@p)))
   rm(target_mat)
 
-  unlist(
-    lapply(
-      il,
-      function(b) {
-        1 - length(intersect(b+1,a)) / length(union(b+1,a))
-      }
+  if(direction == "positive" & type == "distance") {
+    unlist(
+      lapply(
+        il,
+        function(b) {
+          1 - length(intersect(b+1,a)) / length(union(b+1,a))
+        }
+      )
     )
-  )
+  } else if(direction == "positive" & type == "similarity") {
+    unlist(
+      lapply(
+        il,
+        function(b) {
+          length(intersect(b+1,a)) / length(union(b+1,a))
+        }
+      )
+    )
+  } else if(direction == "negative" & type == "distance") {
+    unlist(
+      lapply(
+        il,
+        function(b) {
+          1 - length(setdiff(b+1,a)) / length(union(b+1,a))
+        }
+      )
+    )
+  } else if(direction == "negative" & type == "similarity") {
+    unlist(
+      lapply(
+        il,
+        function(b) {
+          length(setdiff(b+1,a)) / length(union(b+1,a))
+        }
+      )
+    )
+  }
+
 }

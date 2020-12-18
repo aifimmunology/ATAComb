@@ -4,8 +4,13 @@
 \alias{filter_fragments}
 \title{Filter a list of GenomicRanges objects against a single GenomicRanges object}
 \usage{
-filter_fragments(fragment_list, target_gr, mode = "remove",
-  ignore_strand = TRUE, n_threads = 1)
+filter_fragments(
+  fragment_list,
+  target_gr,
+  mode = "remove",
+  ignore_strand = TRUE,
+  n_threads = 1
+)
 }
 \arguments{
 \item{fragment_list}{The list object containing GenomicRanges objects}
