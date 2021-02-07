@@ -102,28 +102,6 @@ atac_lsi <- function(atac_matrix,
            seed = seed)
 }
 
-#' Compute Jaccard distances
-#'
-#' @param m a sparse matrix of KNN
-#'
-#' @return a sparse matrix of Jaccard distances.
-#' @export
-sparse_jaccard <-  function(m) {
-
-  # common values:
-  A <- Matrix::tcrossprod(m)
-  A <- as(A, "dgTMatrix")
-
-  # counts for each row
-  b <- Matrix::rowSums(m)
-
-  # Jacard formula: #common / (#i + #j - #common)
-  A@x <- A@x / (b[A@i+1] + b[A@j+1] - A@x)
-
-  return(A)
-}
-
-
 #' Project a query TF-IDF dataset onto a target SVD space.
 #'
 #' Both query_tf_idf and target_tf_idf must have common features.

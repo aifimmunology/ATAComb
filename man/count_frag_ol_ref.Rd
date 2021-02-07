@@ -4,8 +4,14 @@
 \alias{count_frag_ol_ref}
 \title{Count overlaps between each GRanges object in a list and a single target GRanges object (reference).}
 \usage{
-count_frag_ol_ref(query_fragments, target_GRanges, binarize = TRUE,
-  sparse = FALSE, aggregate = FALSE, n_threads = 1)
+count_frag_ol_ref(
+  query_fragments,
+  target_GRanges,
+  binarize = TRUE,
+  sparse = FALSE,
+  aggregate = FALSE,
+  n_threads = 1
+)
 }
 \arguments{
 \item{query_fragments}{A GenomicRanges object or a list of GenomicRanges objects to use as a query}
