@@ -556,7 +556,7 @@ n_doublets <-  n_pre_doublet_filter - n_post_doublet_filter
 stm(paste0("ArchR: Doublet barcodes = ",n_doublets))
 
 # Match order to archr file
-filtered_meta <- filtered_meta[match(filtered_meta$original_barcodes, filtered_archr_barcodes),]
+filtered_meta <- filtered_meta[match(filtered_archr_barcodes, filtered_meta$original_barcodes),]
 
 # Add additional ArchR metadata to filtered_meta
 filtered_meta$DoubletScore <- archr_meta[["DoubletScore"]]
