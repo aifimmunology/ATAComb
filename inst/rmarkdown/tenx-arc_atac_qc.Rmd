@@ -515,7 +515,7 @@ unfiltered_archr_names <- getCellNames(proj)
 # This will be FALSE in the case of small test datasets
 if(min(doublet_scores[[1]]$doubletEnrich) < 1) {
   # Remove doublets
-  proj <- filterDoublets(proj)
+  #proj <- filterDoublets(proj)
   
   # Get filtered names and original barcodes
   archr_meta <- getCellColData(proj)
