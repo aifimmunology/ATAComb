@@ -1,8 +1,12 @@
 Package: ATAComb
 Type: Package
 Title: QC and Analysis of scATAC-seq data
-Version: 0.1.1
+Version: 0.1.2
 Author: Lucas Graybuck <lucasg@alleninstitute.org>
+Authors@R: c(person("Lucas", "Graybuck", email = "lucasg@alleninstitute.org",
+                  role = c("aut", "cre")),
+             person("Olivia", "Fong", email = "olivia.fong@alleninstitute.org",
+                  role = c("aut")))
 Maintainer: Lucas Graybuck <lucasg@alleninstitute.org>
 Description: Functions and Rmarkdown files for QC and analysis of scATAC-seq datasets.
 License: Allen Institute Software License
@@ -27,4 +31,5 @@ Imports:
 LazyData: true
 RoxygenNote: 7.1.1
 Suggests: 
-    testthat
+    testthat,
+    ArchR
