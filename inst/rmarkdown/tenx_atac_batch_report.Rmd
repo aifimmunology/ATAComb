@@ -230,6 +230,9 @@ well_samples <- unique(meta[,c("well_id","pbmc_sample_id","well_label")])
 ```{r}
 stm("Filtering based on QC cutoffs")
 
+meta <- meta %>%
+  dplyr::left_join(dplyr::select(filtered_meta, barcodes, DoubletScore, DoubletEnrichment, TSSEnrichment))
+
 filtered_meta <- meta
 for(i in seq_along(cutoffs)) {
   cut_name <- names(cutoffs)[i]
@@ -304,6 +307,35 @@ qc_aligned_barplot(meta,
                    category_name = "Barcode Category")
 ```
 
+```{r}
+qc_violin_plot(filtered_meta,
+                                     category_x = "well_label",
+                                     name_x = "Well ID",
+                                     column_y = "DoubletEnrichment",
+                                     name_y = "Doublet Enrichment",
+                                     log_y = FALSE,
+                                     fill = "dodgerblue")
+```
+
+```{r}
+qc_violin_plot(filtered_meta,
+                                     category_x = "well_label",
+                                     name_x = "Well ID",
+                                     column_y = "DoubletScore",
+                                     name_y = "Doublet Score",
+                                     log_y = FALSE,
+                                     fill = "dodgerblue")
+```
+
+```{r}
+qc_violin_plot(filtered_meta,
+                                     category_x = "well_label",
+                                     name_x = "Well ID",
+                                     column_y = "TSSEnrichment",
+                                     name_y = "TSS Enrichment",
+                                     log_y = FALSE,
+                                     fill = "dodgerblue")
+```
 [Return to Contents](#contents)
 
 <a id="fragment_stats"></a>
