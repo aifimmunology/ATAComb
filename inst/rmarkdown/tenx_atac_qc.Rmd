@@ -264,8 +264,8 @@ if(refs == "all") {
 #### Check window sizes
 ```{r}
 window_mat_files <- list.files(in_pre, pattern = "window.+counts.tsv.gz", full.names = TRUE)
-window_mat_names <- sub(paste0(in_prefix,"_"), "", window_mat_files)
-window_mat_names <- sub("_counts.tsv.gz","",window_mat_names)
+window_mat_names <- sub("_counts.tsv.gz","",window_mat_files)
+window_mat_names <- sub(".+_", "", window_mat_names)
 stm(paste(c("Available window matrices:", window_mat_names), collapse = " "))
 
 if(window_sizes[1] == "all") {
