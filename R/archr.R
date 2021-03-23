@@ -12,7 +12,7 @@ get_archr_dgCMatrix <- function(proj,
                                 target = "GeneScoreMatrix",
                                 ...) {
 
-  if(matrix == "GeneScoreMatrix") {
+  if(target == "GeneScoreMatrix") {
 
     se <- ArchR::getMatrixFromProject(
       proj,
@@ -23,7 +23,7 @@ get_archr_dgCMatrix <- function(proj,
 
     rownames(mat) <- se@elementMetadata@listData$name
 
-  } else if(matrix == "PeakMatrix") {
+  } else if(target == "PeakMatrix") {
     se <- ArchR::getMatrixFromProject(
       proj,
       useMatrix = "PeakMatrix",
@@ -37,7 +37,7 @@ get_archr_dgCMatrix <- function(proj,
       end(se@rowRanges),
       sep = "_")
 
-  } else if(matrix == "TileMatrix") {
+  } else if(target == "TileMatrix") {
     se <- ArchR::getMatrixFromProject(
       proj,
       useMatrix = "TileMatrix",
