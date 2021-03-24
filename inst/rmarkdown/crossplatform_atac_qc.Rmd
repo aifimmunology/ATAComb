@@ -562,8 +562,11 @@ n_total <- nrow(filtered_meta)
 
 stm(paste0("ArchR: Total barcodes = ", n_total))
 
+proj2 <- filterDoublets(proj)
+filtered_names <- getCellNames(proj2)
+
 archr_meta <- archr_meta %>%
-  dplyr::mutate(singlet = DoubletEnrichment >= 1)
+  dplyr::mutate(singlet = archr_names %in% filtered_names)
 
 n_singlets <- sum(archr_meta$singlet)
 
