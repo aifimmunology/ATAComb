@@ -531,7 +531,7 @@ stm(paste0("ArchR: ArrowFile generated at ", ArrowFile))
 
 #### Score and filter doublets
 ```{r}
-stm("ArchR: Scoring and filtering doublets")
+stm("ArchR: Scoring doublets")
 doublet_scores <- addDoubletScores(input = ArrowFile,
                                    force = TRUE)
 
@@ -539,6 +539,7 @@ proj <- ArchRProject(ArrowFiles = ArrowFile,
                      copyArrows = TRUE)
 
 archr_meta <- getCellColData(proj)
+archr_meta <- as.data.frame(archr_meta)
 
 proj_ArrowFile <- getArrowFiles(proj)
 stm(paste0("ArchR: Project ArrowFile located at ", proj_ArrowFile))
