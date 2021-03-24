@@ -23,6 +23,7 @@ quiet_library <- function(...) {
 }
 
 library(data.table)
+library(H5weaver)
 ```
 
 Declaring start
