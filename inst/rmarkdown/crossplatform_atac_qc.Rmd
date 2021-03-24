@@ -580,7 +580,7 @@ filtered_meta <- filtered_meta[archr_barcodes,]
 # Add additional ArchR metadata to filtered_meta
 filtered_meta$DoubletScore <- archr_meta[["DoubletScore"]]
 filtered_meta$DoubletEnrichment <- archr_meta[["DoubletEnrichment"]]
-filtered_meta$singlet <- arch_meta[["singlet"]]
+filtered_meta$singlet <- archr_meta[["singlet"]]
 filtered_meta$TSSEnrichment <- archr_meta[["TSSEnrichment"]]
 ```
 
