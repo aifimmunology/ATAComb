@@ -573,6 +573,7 @@ n_doublets <-  sum(!archr_meta$singlet)
 stm(paste0("ArchR: Doublet barcodes = ", n_doublets))
 
 # Match order to archr file
+filtered_meta <- as.data.frame(filtered_meta)
 rownames(filtered_meta) <- filtered_meta$original_barcodes
 filtered_meta <- filtered_meta[archr_barcodes,]
 
