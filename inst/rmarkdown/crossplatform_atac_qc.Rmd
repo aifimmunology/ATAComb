@@ -600,9 +600,7 @@ stm("Resolving metadata discrepencies")
 proj_meta <- getCellColData(proj)
 h5_ls <- h5ls(out_arrow)
 
-# h5_MetaNames <- h5_ls[h5_ls$group == "/Metadata",]
-# h5_MetaNames <- h5_MetaNames[h5_MetaNames$dim != 1,]
-# h5_MetaNames <- h5_MetaNames[h5_MetaNames$dim != length(archr_names),]
+h5_MetaNames <- h5_ls[h5_ls$group == "/Metadata",]
 # 
 # if(nrow(h5_MetaNames) > 0) {
 #   h5_CellNames <- h5read(out_arrow, "/Metadata/CellNames")
