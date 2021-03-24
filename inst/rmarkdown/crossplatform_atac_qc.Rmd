@@ -196,7 +196,7 @@ if(!dir.exists(in_tenx)) {
     stop()
   }
   
-  arc_sum <- file.path(in_tenx, "arc_atac_summary.csv")
+  arc_sum <- file.path(in_tenx, "atac_summary.csv")
   atac_sum <- file.path(in_tenx, "summary.csv")
   
   if(file.exists(arc_sum)) {
