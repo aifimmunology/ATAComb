@@ -244,8 +244,8 @@ reference_names <- sub("_gr.rds","",reference_names)
 stm(paste(c("Available references:", reference_names), collapse = " "))
 
 feature_mat_files <- list.files(in_pre, pattern = "sparse_matrix.tsv.gz", full.names = TRUE)
-feature_mat_names <- sub("_sparse_matrix.tsv.gz","",feature_mat_files)
-feature_mat_names <- sub(".+_", "", feature_mat_names)
+feature_mat_names <- sub("_sparse_matrix.tsv.gz","", basename(feature_mat_files))
+feature_mat_names <- sub("[^_]+_", "", feature_mat_names)
 stm(paste(c("Available reference matrices:", feature_mat_names), collapse = " "))
 
 matching_refs <- intersect(reference_names, feature_mat_names)
@@ -294,8 +294,8 @@ if(refs == "all") {
 #### Check window sizes
 ```{r}
 window_mat_files <- list.files(in_pre, pattern = "window.+counts.tsv.gz", full.names = TRUE)
-window_mat_names <- sub("_counts.tsv.gz","",window_mat_files)
-window_mat_names <- sub(".+_", "", window_mat_names)
+window_mat_names <- sub("_counts.tsv.gz","",basename(window_mat_files))
+window_mat_names <- sub("[^_]+_", "", window_mat_names)
 stm(paste(c("Available window matrices:", window_mat_names), collapse = " "))
 
 if(window_sizes[1] == "all") {
