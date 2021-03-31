@@ -588,7 +588,8 @@ filtered_meta$TSSEnrichment <- archr_meta[["TSSEnrichment"]]
 
 # Add to unfiltered meta for later use
 meta <- meta %>%
-  dplyr::mutate(singlet = barcodes %in% archr_meta$barcodes[archr_meta$singlet])
+  dplyr::mutate(pass_qc = barcodes %in% filtered_meta$barcodes) %>%
+  dplyr::mutate(singlet = barcodes %in% filtered_meta$barcodes[filtered_meta$singlet])
 ```
 
 #### Save Archr project and shift arrow to output directory
@@ -786,7 +787,8 @@ walk(seq_along(window_mat_files),
        out_file <- paste0(out_prefix, window_mat_name, ".h5")
        stm(paste("Writing .h5 file to:", out_file))
        write_h5_list(window_list,
-                     out_file)
+                     out_file,
+                     overwrite = TRUE)
        
        rm(window_list)
      })
