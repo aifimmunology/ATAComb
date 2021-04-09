@@ -110,8 +110,8 @@ in_well <- sub("-[AHR]?P","-AP",in_well)
 in_batch <- sub("-.+","",in_well)
 
 # Check Well ID format
-if(!grepl("^[A-Z][0-9]{3}-AP[0-9]C[0-9]W[0-9]$", in_well)) {
-  stm(paste0("ERROR: Input Well ID is not in expected format, e.g. B###-AP#C#W# :", in_h5))
+if(!grepl("^[A-Z]+[0-9]+-.?P[0-9]C[0-9]W[0-9]$", in_well)) {
+  stm(paste0("ERROR: Input Well ID is not in expected format, e.g. EXP###-AP#C#W# or B###-AP#C#W# :", in_h5))
   stop()
 }
 
@@ -214,8 +214,8 @@ reference_names <- sub("_gr.rds","",reference_names)
 stm(paste(c("Available references:", reference_names), collapse = " "))
 
 feature_mat_files <- list.files(in_pre, pattern = "sparse_matrix.tsv.gz", full.names = TRUE)
-feature_mat_names <- sub(paste0(in_prefix,"_"), "", feature_mat_files)
-feature_mat_names <- sub("_sparse_matrix.tsv.gz","",feature_mat_names)
+feature_mat_names <- sub("_sparse_matrix.tsv.gz","", basename(feature_mat_files))
+feature_mat_names <- sub("[^_]+_", "", feature_mat_names)
 stm(paste(c("Available reference matrices:", feature_mat_names), collapse = " "))
 
 matching_refs <- intersect(reference_names, feature_mat_names)
@@ -264,8 +264,8 @@ if(refs == "all") {
 #### Check window sizes
 ```{r}
 window_mat_files <- list.files(in_pre, pattern = "window.+counts.tsv.gz", full.names = TRUE)
-window_mat_names <- sub(paste0(in_prefix,"_"), "", window_mat_files)
-window_mat_names <- sub("_counts.tsv.gz","",window_mat_names)
+window_mat_names <- sub("_counts.tsv.gz","",window_mat_files)
+window_mat_names <- sub(".+_", "", window_mat_names)
 stm(paste(c("Available window matrices:", window_mat_names), collapse = " "))
 
 if(window_sizes[1] == "all") {

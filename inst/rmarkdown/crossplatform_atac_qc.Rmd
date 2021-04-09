@@ -106,7 +106,7 @@ if(is.null(params$in_pre)) {
   out_dir <- params$out_dir
 }
 
-in_well <- sub("-[AHR]?P","-AP",in_well)
+in_well <- sub("-.?P","-AP",in_well)
 in_batch <- sub("-.+","",in_well)
 
 # Check Well ID format
@@ -177,20 +177,50 @@ if(!dir.exists(in_tenx)) {
   stm(paste0("ERROR: Cannot find IN 10x outputs:", in_tenx))
   stop()
 } else {
-  in_sin <- file.path(in_tenx, "singlecell.csv")
-  if(!file.exists(in_sin)) {
-    stm(paste0("ERROR: Cannot find 10x summary.csv:", in_sin))
+  
+  arc_sin <- file.path(in_tenx, "arc_singlecell.csv")
+  atac_sin <- file.path(in_tenx, "singlecell.csv")
+  bc_sin <- file.path(in_tenx, "barcode_counts.tsv")
+  
+  if(file.exists(arc_sin)) {
+    stm(paste("Found Arc arc_singlecell.csv file:", arc_sin))
+    in_sin <- arc_sin
+  } else if(file.exists(atac_sin)) {
+    stm(paste("Found ATAC singlecell.csv file:", atac_sin))
+    in_sin <- atac_sin
+  } else if(file.exists(bc_sin)) {
+    stm(paste("Found barcode_counts.tsv file:", bc_sin))
+    in_sin <- bc_sin
+  } else {
+    stm(paste("ERROR: Cannot find singlecell.csv file in", in_tenx))
     stop()
   }
   
-  in_sum <- file.path(in_tenx, "summary.csv")
-  if(!file.exists(in_sum)) {
-    stm(paste0("WARNING: Cannot find IN summary.csv:", in_sum))
+  arc_sum <- file.path(in_tenx, "atac_summary.csv")
+  atac_sum <- file.path(in_tenx, "summary.csv")
+  
+  if(file.exists(arc_sum)) {
+    stm(paste("Found Arc summary.csv file:", arc_sum))
+    in_sum <- arc_sum
+  } else if(file.exists(atac_sum)) {
+    stm(paste("Found ATAC summary.csv file:", atac_sum))
+    in_sum <- atac_sum
+  } else {
+    in_sum <- NULL
+    stm(paste("WARNING: Cannot find summary.csv file in", in_tenx))
     stm("WARNING: Some QC metrics will not be calculated")
   }
   
-  in_frag <- file.path(in_tenx, "fragments.tsv.gz")
-  if(!file.exists(in_frag)) {
+  arc_frag <- file.path(in_tenx, "atac_fragments.tsv.gz")
+  atac_frag <- file.path(in_tenx, "fragments.tsv.gz")
+  
+  if(file.exists(arc_frag)) {
+    stm(paste("Found Arc fragments.tsv.gz file:", arc_frag))
+    in_frag <- arc_frag
+  } else if(file.exists(atac_frag)) {
+    stm(paste("Found ATAC fragments.tsv.gz file:", atac_frag))
+    in_frag <- atac_frag
+  } else {
     stm(paste0("ERROR: Cannot find 10x fragments.tsv.gz:", in_tenx))
     stop()
   }
@@ -264,8 +294,8 @@ if(refs == "all") {
 #### Check window sizes
 ```{r}
 window_mat_files <- list.files(in_pre, pattern = "window.+counts.tsv.gz", full.names = TRUE)
-window_mat_names <- sub(paste0(in_prefix,"_"), "", window_mat_files)
-window_mat_names <- sub("_counts.tsv.gz","",window_mat_names)
+window_mat_names <- sub("_counts.tsv.gz","",basename(window_mat_files))
+window_mat_names <- sub("[^_]+_", "", window_mat_names)
 stm(paste(c("Available window matrices:", window_mat_names), collapse = " "))
 
 if(window_sizes[1] == "all") {
@@ -400,15 +430,18 @@ stm(paste0("Reading 10x metadata from ", in_sin))
 
 if(grepl("singlecell.csv", in_sin)) {
   tenx_meta <- fread(in_sin)[-1,]
-  tenx_meta <- tenx_meta[, list(barcode, total, duplicate,mitochondrial , passed_filters)]
-  names(tenx_meta) <- c("original_barcodes","n_fragments","n_duplicate","n_mito","n_unique")
+  tenx_meta <- tenx_meta[, list(cell_id, barcode, total, duplicate, mitochondrial , passed_filters)]
+  names(tenx_meta) <- c("barcodes","original_barcodes","n_fragments","n_duplicate","n_mito","n_unique")
 } else if(grepl("barcode_counts.tsv", in_sin)) {
   stm("Using barcode_counts.tsv")
   tenx_meta <- fread(in_sin)
   names(tenx_meta) <- c("original_barcodes", "n_fragments")
   tenx_meta$n_unique <- tenx_meta$n_fragments
+  tenx_meta$barcodes <- "None"
 }
+```
 
+```{r}
 stm(paste0("Reading reference counts from ", in_pre))
 
 ref_count_files <- list.files(in_pre, pattern = "total_counts.tsv.gz", full.names = TRUE)
@@ -436,9 +469,15 @@ for(i in seq_along(ref_counts)) {
 ```{r Generate IDs}
 stm("Generating Cell IDs")
 
-meta$barcodes <- ids::uuid(nrow(meta),
-                           drop_hyphens = TRUE, 
-                           use_time = TRUE)
+# cellranger-atac uses "None" in cell_ids
+# cellranger-arc metadata that's been pre-processed will already have UUIds in this column.
+# barcode_counts.tsv-based datasets will have "None" filled into the barcodes column.
+if(tenx_meta$barcodes[1] == "None") {
+    tenx_meta$barcodes <- ids::uuid(nrow(tenx_meta),
+                                    drop_hyphens = TRUE, 
+                                    use_time = TRUE)
+}
+
 meta$cell_name <- ids::adjective_animal(nrow(meta),
                                         n_adjectives = 2,
                                         max_len = 10)
@@ -492,12 +531,15 @@ stm(paste0("ArchR: ArrowFile generated at ", ArrowFile))
 
 #### Score and filter doublets
 ```{r}
-stm("ArchR: Scoring and filtering doublets")
+stm("ArchR: Scoring doublets")
 doublet_scores <- addDoubletScores(input = ArrowFile,
                                    force = TRUE)
 
 proj <- ArchRProject(ArrowFiles = ArrowFile,
                      copyArrows = TRUE)
+
+archr_meta <- getCellColData(proj)
+archr_meta <- as.data.frame(archr_meta)
 
 proj_ArrowFile <- getArrowFiles(proj)
 stm(paste0("ArchR: Project ArrowFile located at ", proj_ArrowFile))
@@ -506,69 +548,52 @@ stm(paste0("ArchR: Project ArrowFile located at ", proj_ArrowFile))
 
 ```{r}
 # Store unfiltered names for later
-unfiltered_archr_names <- getCellNames(proj)
+archr_names <- getCellNames(proj)
+archr_barcodes <- sub(".+#","",archr_names)
 
 # Check for doublet scoring
 # This will be FALSE in the case of small test datasets
-if(min(doublet_scores[[1]]$doubletEnrich) < 1) {
-  # Remove doublets
-  proj <- filterDoublets(proj)
-  
-  # Get filtered names and original barcodes
-  archr_meta <- getCellColData(proj)
-  filtered_archr_names <- rownames(archr_meta)
-  filtered_archr_barcodes <- sub(".+#","",filtered_archr_names)
-  archr_meta <- archr_meta[filtered_archr_names,]
-  
-  filter_doublets <- TRUE
-} else {
-  stm("WARNING: DOUBLET SCORING FAILED - retaining all cells.")
-  
-  # Don't filter names and original barcodes
-  archr_meta <- getCellColData(proj)
-  filtered_archr_names <- rownames(archr_meta)
-  filtered_archr_barcodes <- sub(".+#","",filtered_archr_names)
-  archr_meta <- archr_meta[filtered_archr_names,]
-  
-  filter_doublets <- FALSE
+if(min(doublet_scores[[1]]$doubletEnrich) >= 1) {
+  stm("WARNING: DOUBLET SCORING FAILED.")
 }
 
-
-# Filter metadata to match
 # Get counts for reporting
-n_pre_doublet_filter <- nrow(filtered_meta)
+n_total <- nrow(filtered_meta)
 
-stm(paste0("ArchR: Total barcodes = ",n_pre_doublet_filter))
+stm(paste0("ArchR: Total barcodes = ", n_total))
 
-meta <- meta %>%
-  dplyr::mutate(singlet = original_barcodes %in% filtered_archr_barcodes)
+proj2 <- filterDoublets(proj)
+filtered_names <- getCellNames(proj2)
 
-filtered_meta <- filtered_meta %>%
-  dplyr::filter(original_barcodes %in% filtered_archr_barcodes)
+archr_meta <- archr_meta %>%
+  dplyr::mutate(singlet = archr_names %in% filtered_names)
 
-n_post_doublet_filter <- nrow(filtered_meta)
-stm(paste0("ArchR: Singlet barcodes = ",n_post_doublet_filter))
+n_singlets <- sum(archr_meta$singlet)
 
-n_doublets <-  n_pre_doublet_filter - n_post_doublet_filter
-stm(paste0("ArchR: Doublet barcodes = ",n_doublets))
+stm(paste0("ArchR: Singlet barcodes = ", n_singlets))
+
+n_doublets <-  sum(!archr_meta$singlet)
+stm(paste0("ArchR: Doublet barcodes = ", n_doublets))
 
 # Match order to archr file
-filtered_meta <- filtered_meta[match(filtered_meta$original_barcodes, filtered_archr_barcodes),]
+filtered_meta <- as.data.frame(filtered_meta)
+rownames(filtered_meta) <- filtered_meta$original_barcodes
+filtered_meta <- filtered_meta[archr_barcodes,]
 
 # Add additional ArchR metadata to filtered_meta
 filtered_meta$DoubletScore <- archr_meta[["DoubletScore"]]
 filtered_meta$DoubletEnrichment <- archr_meta[["DoubletEnrichment"]]
+filtered_meta$singlet <- archr_meta[["singlet"]]
 filtered_meta$TSSEnrichment <- archr_meta[["TSSEnrichment"]]
+
+# Add to unfiltered meta for later use
+meta <- meta %>%
+  dplyr::mutate(pass_qc = barcodes %in% filtered_meta$barcodes) %>%
+  dplyr::mutate(singlet = barcodes %in% filtered_meta$barcodes[filtered_meta$singlet])
 ```
 
 #### Save Archr project and shift arrow to output directory
 ```{r}
-if(filter_doublets) {
-  stm("ArchR: Subsetting to remove doublets")
-  proj <- subsetArchRProject(proj,
-                             cells = filtered_archr_names)
-}
-
 ArrowFile <- getArrowFiles(proj)
 
 out_arrow <- paste0(out_prefix, "archr.arrow")
@@ -577,28 +602,26 @@ stm(paste0("Saving .arrow to ", out_arrow))
 file.copy(ArrowFile, out_arrow)
 ```
 
-Resolve metadata discrepencies
+Resolve metadata discrepancies
 ```{r}
 stm("Resolving metadata discrepencies")
 proj_meta <- getCellColData(proj)
 h5_ls <- h5ls(out_arrow)
 
 h5_MetaNames <- h5_ls[h5_ls$group == "/Metadata",]
-h5_MetaNames <- h5_MetaNames[h5_MetaNames$dim != 1,]
-h5_MetaNames <- h5_MetaNames[h5_MetaNames$dim != length(filtered_archr_names),]
-
-if(nrow(h5_MetaNames) > 0) {
-  h5_CellNames <- h5read(out_arrow, "/Metadata/CellNames")
-  h5_keepLogic <- h5_CellNames %in% filtered_archr_barcodes
-  
-  for(i in 1:nrow(h5_MetaNames)) {
-    target <- h5_MetaNames$full_name[i]
-    h5_MetaVals <- h5read(out_arrow, target)
-    h5_MetaVals <- h5_MetaVals[h5_keepLogic]
-    h5delete(out_arrow, target)
-    h5write(h5_MetaVals, out_arrow, target)
-  }
-}
+# 
+# if(nrow(h5_MetaNames) > 0) {
+#   h5_CellNames <- h5read(out_arrow, "/Metadata/CellNames")
+#   h5_keepLogic <- h5_CellNames %in% archr_barcodes
+#   
+#   for(i in 1:nrow(h5_MetaNames)) {
+#     target <- h5_MetaNames$full_name[i]
+#     h5_MetaVals <- h5read(out_arrow, target)
+#     h5_MetaVals <- h5_MetaVals[h5_keepLogic]
+#     h5delete(out_arrow, target)
+#     h5write(h5_MetaVals, out_arrow, target)
+#   }
+# }
 
 # Add missing metadata
 additional_meta <- setdiff(names(filtered_meta), h5_MetaNames$name)
@@ -764,7 +787,8 @@ walk(seq_along(window_mat_files),
        out_file <- paste0(out_prefix, window_mat_name, ".h5")
        stm(paste("Writing .h5 file to:", out_file))
        write_h5_list(window_list,
-                     out_file)
+                     out_file,
+                     overwrite = TRUE)
        
        rm(window_list)
      })
