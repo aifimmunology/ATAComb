@@ -80,7 +80,7 @@ options(stringsAsFactors = FALSE)
 
 Declaring start
 ```{r Declare start}
-stm("Starting scATAC-seq preprocessing")
+stm("Starting scATAC-seq QC")
 ```
 
 #### Argument parsing
@@ -308,7 +308,7 @@ if(window_sizes[1] == "all") {
   good_windows <- intersect(split_windows, window_mat_names)
   
   # Stop if no matches
-  if(length(good_refs) == 0) {
+  if(length(good_windows) == 0) {
     stop(paste("No window matrices match", window_sizes))
   }
   
