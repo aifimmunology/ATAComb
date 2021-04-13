@@ -80,7 +80,7 @@ options(stringsAsFactors = FALSE)
 
 Declaring start
 ```{r Declare start}
-stm("Starting scATAC-seq preprocessing")
+stm("Starting scATAC-seq QC")
 ```
 
 #### Argument parsing
@@ -110,7 +110,7 @@ in_well <- sub("-.?P","-AP",in_well)
 in_batch <- sub("-.+","",in_well)
 
 # Check Well ID format
-if(!grepl("^[A-Z]+[0-9]+-.?P[0-9]C[0-9]W[0-9]$", in_well)) {
+if(!grepl("^[A-Z|-]+[0-9]+-.?P[0-9]C[0-9]W[0-9]$", in_well)) {
   stm(paste0("ERROR: Input Well ID is not in expected format, e.g. EXP###-AP#C#W# or B###-AP#C#W# :", in_h5))
   stop()
 }
@@ -308,7 +308,7 @@ if(window_sizes[1] == "all") {
   good_windows <- intersect(split_windows, window_mat_names)
   
   # Stop if no matches
-  if(length(good_refs) == 0) {
+  if(length(good_windows) == 0) {
     stop(paste("No window matrices match", window_sizes))
   }
   
