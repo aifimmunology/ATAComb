@@ -175,3 +175,31 @@ get_archr_peakAnno_mat <- function(proj, peakAnnotation = "EncodeTFBS") {
 link_peakAnno_to_gene <- function(anno_mat, p2g_mat) {
   t(anno_mat) %*% p2g_mat
 }
+
+#' Convert a sparse linkage matrix to an edge data.frame for graph analysis
+#'
+#' @param link_mat a matrix with sources as columns, targets as rows, and weights as values.
+#'
+#' @return a data.frame with columns "from", "to", and "weight".
+#' @export
+#'
+link_mat_to_df <- function(link_mat) {
+  data.frame(
+    from = rep(colnames(link_mat), diff(link_mat@p)),
+    to = rownames(link_mat)[link_mat@i + 1],
+    weight = link_mat@x
+  )
+}
+
+#' Convert a sparse linkage matrix to a graph object
+#'
+#' @param link_mat a matrix with sources as columns, targets as rows, and weights as values.
+#'
+#' @return an igraph object
+#' @export
+#'
+link_mat_to_graph <- function(link_mat) {
+  tidygraph::as_tbl_graph(
+    link_mat_to_df(link_mat)
+  )
+}
