@@ -131,10 +131,10 @@ get_archr_p2g_mat <- function(proj,
   peak_set <- get_archr_peakSet(proj)
   gene_set <- get_archr_geneSet(proj)
 
-  p2g_df <- get_archr_p2g_links(proj,
-                                fdr_cut = fdr_cut,
-                                cor_cut = cor_cut,
-                                cor_type = cor_type)
+  p2g_df <- get_archr_p2g_df(proj,
+                             fdr_cut = fdr_cut,
+                             cor_cut = cor_cut,
+                             cor_type = cor_type)
 
   Matrix::sparseMatrix(
     i = p2g_df$idxATAC,
