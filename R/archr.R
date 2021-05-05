@@ -173,7 +173,7 @@ get_archr_peakAnno_mat <- function(proj, peakAnnotation = "EncodeTFBS") {
 #' @export
 #'
 link_peakAnno_to_gene <- function(anno_mat, p2g_mat) {
-  t(anno_mat) %*% p2g_mat
+  Matrix::t(anno_mat) %*% p2g_mat
 }
 
 #' Convert a sparse linkage matrix to an edge data.frame for graph analysis
