@@ -447,6 +447,7 @@ stm(paste0("Reading reference counts from ", in_pre))
 ref_count_files <- list.files(in_pre, pattern = "total_counts.tsv.gz", full.names = TRUE)
 ref_count_names <- sub(paste0(in_prefix,"_"), "", ref_count_files)
 ref_count_names <- sub("_total_counts.tsv.gz","",ref_count_names)
+ref_count_names <- sub(".+_", "", ref_count_names)
 
 ref_counts <- map(seq_along(ref_count_files),
                   function(x) {
