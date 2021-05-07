@@ -1189,7 +1189,7 @@ if(file.exists(in_sum)) {
 
 #### Plot Fragment Widths
 ```{r}
-frag_widths_file <- list.files(in_prefix, pattern = "_fragment_widths.tsv.gz", full.names = TRUE)
+frag_widths_file <- list.files(in_pre, pattern = "_fragment_widths.tsv.gz", full.names = TRUE)
 
 frag_widths <- fread(frag_widths_file,
                      header = FALSE,
