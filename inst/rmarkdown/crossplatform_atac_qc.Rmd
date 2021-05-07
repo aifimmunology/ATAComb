@@ -230,6 +230,7 @@ if(!file.exists(in_key)) {
   stm(paste0("ERROR: Cannot find IN SampleSheet file:", in_key))
   stop()
 }
+
 in_prefix <- file.path(in_pre, in_well)
 ```
 
@@ -610,19 +611,6 @@ proj_meta <- getCellColData(proj)
 h5_ls <- h5ls(out_arrow)
 
 h5_MetaNames <- h5_ls[h5_ls$group == "/Metadata",]
-# 
-# if(nrow(h5_MetaNames) > 0) {
-#   h5_CellNames <- h5read(out_arrow, "/Metadata/CellNames")
-#   h5_keepLogic <- h5_CellNames %in% archr_barcodes
-#   
-#   for(i in 1:nrow(h5_MetaNames)) {
-#     target <- h5_MetaNames$full_name[i]
-#     h5_MetaVals <- h5read(out_arrow, target)
-#     h5_MetaVals <- h5_MetaVals[h5_keepLogic]
-#     h5delete(out_arrow, target)
-#     h5write(h5_MetaVals, out_arrow, target)
-#   }
-# }
 
 # Add missing metadata
 additional_meta <- setdiff(names(filtered_meta), h5_MetaNames$name)
@@ -873,7 +861,9 @@ qc_table(barcode_qc_stats)
 if(file.exists(in_sum)) {
   metrics_summary <- read.csv(in_sum)
   
-  saturation_counts <- fread(paste0(in_prefix, "_saturation_curve.tsv.gz"),
+  saturation_counts_file <- list.files(in_pre, pattern = "_saturation_curve.tsv.gz", full.names = TRUE)
+  
+  saturation_counts <- fread(saturation_counts_file,
                              header = F,
                              col.names = c("count", "frequency"))
   saturation_counts$count <- as.numeric(sub("\\r","",saturation_counts$count))
