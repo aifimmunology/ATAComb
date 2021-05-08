@@ -1,7 +1,7 @@
 Package: ATAComb
 Type: Package
 Title: QC and Analysis of scATAC-seq data
-Version: 0.2.1
+Version: 0.2.2
 Author: Lucas Graybuck <lucasg@alleninstitute.org>
 Authors@R: c(person("Lucas", "Graybuck", email = "lucasg@alleninstitute.org",
                   role = c("aut", "cre")),
@@ -32,4 +32,5 @@ LazyData: true
 RoxygenNote: 7.1.1
 Suggests: 
     testthat,
-    ArchR
+    ArchR,
+    tidygraph

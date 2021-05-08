@@ -230,6 +230,7 @@ if(!file.exists(in_key)) {
   stm(paste0("ERROR: Cannot find IN SampleSheet file:", in_key))
   stop()
 }
+
 in_prefix <- file.path(in_pre, in_well)
 ```
 
@@ -445,8 +446,9 @@ if(grepl("singlecell.csv", in_sin)) {
 stm(paste0("Reading reference counts from ", in_pre))
 
 ref_count_files <- list.files(in_pre, pattern = "total_counts.tsv.gz", full.names = TRUE)
-ref_count_names <- sub(paste0(in_prefix,"_"), "", ref_count_files)
+ref_count_names <- basename(ref_count_files)
 ref_count_names <- sub("_total_counts.tsv.gz","",ref_count_names)
+ref_count_names <- sub("^[^_]+_", "", ref_count_names)
 
 ref_counts <- map(seq_along(ref_count_files),
                   function(x) {
@@ -609,19 +611,6 @@ proj_meta <- getCellColData(proj)
 h5_ls <- h5ls(out_arrow)
 
 h5_MetaNames <- h5_ls[h5_ls$group == "/Metadata",]
-# 
-# if(nrow(h5_MetaNames) > 0) {
-#   h5_CellNames <- h5read(out_arrow, "/Metadata/CellNames")
-#   h5_keepLogic <- h5_CellNames %in% archr_barcodes
-#   
-#   for(i in 1:nrow(h5_MetaNames)) {
-#     target <- h5_MetaNames$full_name[i]
-#     h5_MetaVals <- h5read(out_arrow, target)
-#     h5_MetaVals <- h5_MetaVals[h5_keepLogic]
-#     h5delete(out_arrow, target)
-#     h5write(h5_MetaVals, out_arrow, target)
-#   }
-# }
 
 # Add missing metadata
 additional_meta <- setdiff(names(filtered_meta), h5_MetaNames$name)
@@ -872,9 +861,12 @@ qc_table(barcode_qc_stats)
 if(file.exists(in_sum)) {
   metrics_summary <- read.csv(in_sum)
   
-  saturation_counts <- fread(paste0(in_prefix, "_saturation_curve.tsv.gz"),
+  saturation_counts_file <- list.files(in_pre, pattern = "_saturation_curve.tsv.gz", full.names = TRUE)
+  
+  saturation_counts <- fread(saturation_counts_file,
                              header = F,
                              col.names = c("count", "frequency"))
+  
   saturation_counts$count <- as.numeric(sub("\\r","",saturation_counts$count))
   
   fragment_qc_stats <- data.frame(metric = c("Sequenced Fragments",
@@ -1197,11 +1189,14 @@ if(file.exists(in_sum)) {
 
 #### Plot Fragment Widths
 ```{r}
-frag_widths <- fread(paste0(in_prefix, "_fragment_widths.tsv.gz"),
+frag_widths_file <- list.files(in_pre, pattern = "_fragment_widths.tsv.gz", full.names = TRUE)
+
+frag_widths <- fread(frag_widths_file,
                      header = FALSE,
                      col.names = c("original_barcodes", "width", "count"),
                      colClasses = list("character" = 1,
                                        "integer" = c(2,3)))
+
 frag_widths$pass_fail <- ifelse(frag_widths$original_barcodes %in% filtered_meta$original_barcodes,
                                 "pass_qc",
                                 "fail_qc")
