@@ -7,7 +7,6 @@
 #' @return a dgCMatrix object
 #' @export
 #'
-#' @examples
 get_archr_dgCMatrix <- function(proj,
                                 target = "GeneScoreMatrix",
                                 ...) {
@@ -202,4 +201,54 @@ link_mat_to_graph <- function(link_mat) {
   tidygraph::as_tbl_graph(
     link_mat_to_df(link_mat)
   )
+}
+
+
+chr_fragments_datatable <- function(h5_con, chr_name) {
+  rg <- h5read(h5_con, paste0("/Fragments/",chr_name,"/Ranges"))
+
+  data.table(
+    chr = chr_name,
+    start = rg[,1],
+    end = rg[,1] + rg[,2],
+    bc = rep(h5read(h5_con, paste0("/Fragments/",chr_name,"/RGValues")),
+             h5read(h5_con, paste0("/Fragments/",chr_name,"/RGLengths"))),
+    n_umi = 1
+  )
+}
+
+extract_arrow_fragments <- function(arrow_file) {
+  h5_con <- H5Fopen(arrow_file)
+  contents <- h5ls(h5_con)
+  chrs <- contents$name[contents$group == "/Fragments"]
+
+  frags <- chr_fragments_datatable(h5_con, chrs[1])
+  for(i in 2:length(chrs)) {
+    frags <- rbind(frags, chr_fragments_datatable(h5_con, chrs[i]))
+  }
+
+  setorderv(frags, c("chr","start"))
+
+  frags
+}
+
+read_arrow_cell_meta <- function(arrow_file) {
+  h5_con <- H5Fopen(arrow_file)
+  contents <- h5ls(h5_con)
+
+  meta_names <- contents[contents$group == "/Metadata",]
+  meta_names <- meta_names$name[meta_names$dim != 1]
+
+  meta_list <- lapply(
+    meta_names,
+    function(meta_name) {
+      vals <- h5read(h5_con, paste0("/Metadata/",meta_name))
+      as.vector(vals)
+    }
+  )
+
+  df <- as.data.frame(meta_list)
+  names(df) <- meta_names
+
+  df
 }
