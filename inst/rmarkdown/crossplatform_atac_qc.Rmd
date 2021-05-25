@@ -14,6 +14,7 @@ params:
   in_key: NULL
   in_well: NULL
   genome: NULL
+  qc_only: NULL
   refs: NULL
   window_sizes: NULL
   out_dir: NULL
@@ -92,6 +93,7 @@ if(is.null(params$in_pre)) {
   in_key <- system.file("testdata/test_SampleSheet.csv", package = "ATAComb")
   in_well <- "B000-AP0C1W1"
   genome <- "hg38"
+  qc_only <- FALSE
   refs <- "all"
   window_sizes <- "all"
   out_dir <- tempdir()
@@ -101,6 +103,7 @@ if(is.null(params$in_pre)) {
   in_key <- params$in_key
   in_well <- params$in_well
   genome <- params$genome
+  qc_only <- as.logical(params$qc_only)
   refs <- params$refs
   window_sizes <- params$window_sizes
   out_dir <- params$out_dir
@@ -134,6 +137,7 @@ stm(paste0("IN  10x outputs      : ", in_tenx))
 stm(paste0("IN  SampleSheet      : ", in_key))
 stm(paste0("IN  Well ID          : ", in_well))
 stm(paste0("IN  Genome           : ", genome))
+stm(paste0("IN  QC Only          : ", qc_only))
 stm(paste0("IN  References       : ", refs))
 stm(paste0("IN  Window Sizes     : ", window_sizes))
 stm(paste0("OUT Directory        : ", out_dir))
@@ -147,6 +151,7 @@ print(c(
   paste0("IN  SampleSheet      : ", in_key),
   paste0("IN  Well ID          : ", in_well),
   paste0("IN  Genome           : ", genome),
+  paste0("IN  QC Only          : ", qc_only),
   paste0("IN  References       : ", refs),
   paste0("IN  Window Sizes     : ", window_sizes),
   paste0("OUT H5 directory     : ", out_dir)
@@ -236,94 +241,98 @@ in_prefix <- file.path(in_pre, in_well)
 
 #### Check reference overlap files
 ```{r}
-reference_files <- list.files(system.file("reference", package = "ATAComb"), 
-                              pattern = paste0(genome, ".+gr.rds"),
-                              full.names = TRUE)
-reference_names <- sub(paste0(".+",genome,"_"),"",reference_files)
-reference_names <- sub("_gr.rds","",reference_names)
-
-stm(paste(c("Available references:", reference_names), collapse = " "))
-
-feature_mat_files <- list.files(in_pre, pattern = "sparse_matrix.tsv.gz", full.names = TRUE)
-feature_mat_names <- sub("_sparse_matrix.tsv.gz","", basename(feature_mat_files))
-feature_mat_names <- sub("[^_]+_", "", feature_mat_names)
-stm(paste(c("Available reference matrices:", feature_mat_names), collapse = " "))
-
-matching_refs <- intersect(reference_names, feature_mat_names)
-stm(paste(c("Preprocessed reference data:", matching_refs), collapse = " "))
-
-if(length(matching_refs) == 0) {
-  stop("Preprocessed reference datasets do not match available references")
-} else {
-  reference_files <- reference_files[match(matching_refs, reference_names)]
-  reference_names <- matching_refs
-  feature_mat_files <- feature_mat_files[match(matching_refs, feature_mat_names)]
-  feature_mat_names <- matching_refs
-}
-
-if(refs == "all") {
-  stm("Using all matching references")
-} else {
-  split_refs <- unlist(strsplit(refs, split = ","))
+if(!qc_only) {
+  reference_files <- list.files(system.file("reference", package = "ATAComb"), 
+                                pattern = paste0(genome, ".+gr.rds"),
+                                full.names = TRUE)
+  reference_names <- sub(paste0(".+",genome,"_"),"",reference_files)
+  reference_names <- sub("_gr.rds","",reference_names)
   
-  # Check for matching references
-  good_refs <- intersect(split_refs, reference_names)
+  stm(paste(c("Available references:", reference_names), collapse = " "))
   
-  # Stop if no matches
-  if(length(good_refs) == 0) {
-    stop(paste("No references match", refs))
+  feature_mat_files <- list.files(in_pre, pattern = "sparse_matrix.tsv.gz", full.names = TRUE)
+  feature_mat_names <- sub("_sparse_matrix.tsv.gz","", basename(feature_mat_files))
+  feature_mat_names <- sub("[^_]+_", "", feature_mat_names)
+  stm(paste(c("Available reference matrices:", feature_mat_names), collapse = " "))
+  
+  matching_refs <- intersect(reference_names, feature_mat_names)
+  stm(paste(c("Preprocessed reference data:", matching_refs), collapse = " "))
+  
+  if(length(matching_refs) == 0) {
+    stop("Preprocessed reference datasets do not match available references")
+  } else {
+    reference_files <- reference_files[match(matching_refs, reference_names)]
+    reference_names <- matching_refs
+    feature_mat_files <- feature_mat_files[match(matching_refs, feature_mat_names)]
+    feature_mat_names <- matching_refs
   }
   
-  combined_good_refs <- paste(good_refs, collapse = " ")
-  stm(paste0("Selected references: ", combined_good_refs))
-  
-  reference_files <- reference_files[match(good_refs, reference_names)]
-  reference_names <- good_refs
-
-  feature_mat_files <- feature_mat_files[match(good_refs, feature_mat_names)]
-  feature_mat_names <- good_refs
-
-  # Warn about mismatches
-  bad_refs <- setdiff(split_refs, reference_names)
-  if(length(bad_refs) > 0) {
-    bad_refs <- paste(bad_refs, collapse = ",")
-    stm(paste0("WARNING: Reference input(s) ",bad_refs," do not match available references. Skipping."))
+  if(refs == "all") {
+    stm("Using all matching references")
+  } else {
+    split_refs <- unlist(strsplit(refs, split = ","))
+    
+    # Check for matching references
+    good_refs <- intersect(split_refs, reference_names)
+    
+    # Stop if no matches
+    if(length(good_refs) == 0) {
+      stop(paste("No references match", refs))
+    }
+    
+    combined_good_refs <- paste(good_refs, collapse = " ")
+    stm(paste0("Selected references: ", combined_good_refs))
+    
+    reference_files <- reference_files[match(good_refs, reference_names)]
+    reference_names <- good_refs
+    
+    feature_mat_files <- feature_mat_files[match(good_refs, feature_mat_names)]
+    feature_mat_names <- good_refs
+    
+    # Warn about mismatches
+    bad_refs <- setdiff(split_refs, reference_names)
+    if(length(bad_refs) > 0) {
+      bad_refs <- paste(bad_refs, collapse = ",")
+      stm(paste0("WARNING: Reference input(s) ",bad_refs," do not match available references. Skipping."))
+    }
   }
 }
 ```
 
 #### Check window sizes
 ```{r}
-window_mat_files <- list.files(in_pre, pattern = "window.+counts.tsv.gz", full.names = TRUE)
-window_mat_names <- sub("_counts.tsv.gz","",basename(window_mat_files))
-window_mat_names <- sub("[^_]+_", "", window_mat_names)
-stm(paste(c("Available window matrices:", window_mat_names), collapse = " "))
-
-if(window_sizes[1] == "all") {
-  stm("Using all Available window matrices")
-  use_windows <- window_mat_names
-} else {
-  split_windows <- unlist(strsplit(window_sizes, split = ","))
-
-  # Check for matching references
-  good_windows <- intersect(split_windows, window_mat_names)
+if(!qc_only) {
+  window_mat_files <- list.files(in_pre, pattern = "window.+counts.tsv.gz", full.names = TRUE)
+  window_mat_names <- sub("_counts.tsv.gz","",basename(window_mat_files))
+  window_mat_names <- sub("[^_]+_", "", window_mat_names)
+  stm(paste(c("Available window matrices:", window_mat_names), collapse = " "))
   
-  # Stop if no matches
-  if(length(good_windows) == 0) {
-    stop(paste("No window matrices match", window_sizes))
-  }
-  
-  combined_good_windows <- paste(good_windows, collapse = " ")
-  stm(paste0("Selected window matrices: ", good_windows))
-  
-  window_mat_names <- good_windows
-  window_mat_files <- window_mat_files[match(good_windows, window_mat_names)]
-  
-  # Warn about mismatches
-  bad_windows <- setdiff(split_windows, window_mat_names)
-  if(length(bad_windows) > 0) {
-    bad_windows <- paste(bad_windows, collapse = ",")
-    stm(paste0("WARNING: Window input(s) ",bad_windows," do not match available matrices. Skipping."))
+  if(window_sizes[1] == "all") {
+    stm("Using all Available window matrices")
+    use_windows <- window_mat_names
+  } else {
+    split_windows <- unlist(strsplit(window_sizes, split = ","))
+    
+    # Check for matching references
+    good_windows <- intersect(split_windows, window_mat_names)
+    
+    # Stop if no matches
+    if(length(good_windows) == 0) {
+      stop(paste("No window matrices match", window_sizes))
+    }
+    
+    combined_good_windows <- paste(good_windows, collapse = " ")
+    stm(paste0("Selected window matrices: ", good_windows))
+    
+    window_mat_names <- good_windows
+    window_mat_files <- window_mat_files[match(good_windows, window_mat_names)]
+    
+    # Warn about mismatches
+    bad_windows <- setdiff(split_windows, window_mat_names)
+    if(length(bad_windows) > 0) {
+      bad_windows <- paste(bad_windows, collapse = ",")
+      stm(paste0("WARNING: Window input(s) ",bad_windows," do not match available matrices. Skipping."))
+    }
   }
 }
 ```
@@ -596,29 +605,34 @@ meta <- meta %>%
 
 #### Save Archr project and shift arrow to output directory
 ```{r}
-ArrowFile <- getArrowFiles(proj)
-
-out_arrow <- paste0(out_prefix, "archr.arrow")
-
-stm(paste0("Saving .arrow to ", out_arrow))
-file.copy(ArrowFile, out_arrow)
+if(!qc_only) {
+  ArrowFile <- getArrowFiles(proj)
+  
+  out_arrow <- paste0(out_prefix, "archr.arrow")
+  
+  stm(paste0("Saving .arrow to ", out_arrow))
+  file.copy(ArrowFile, out_arrow)
+  
+}
 ```
 
 Resolve metadata discrepancies
 ```{r}
-stm("Resolving metadata discrepencies")
-proj_meta <- getCellColData(proj)
-h5_ls <- h5ls(out_arrow)
-
-h5_MetaNames <- h5_ls[h5_ls$group == "/Metadata",]
-
-# Add missing metadata
-additional_meta <- setdiff(names(filtered_meta), h5_MetaNames$name)
-if(length(additional_meta) > 0) {
-  for(meta_col in additional_meta) {
-    h5write(filtered_meta[[meta_col]],
-            out_arrow,
-            paste0("/Metadata/",meta_col))
+if(!qc_only) {
+  stm("Resolving metadata discrepencies")
+  proj_meta <- getCellColData(proj)
+  h5_ls <- h5ls(out_arrow)
+  
+  h5_MetaNames <- h5_ls[h5_ls$group == "/Metadata",]
+  
+  # Add missing metadata
+  additional_meta <- setdiff(names(filtered_meta), h5_MetaNames$name)
+  if(length(additional_meta) > 0) {
+    for(meta_col in additional_meta) {
+      h5write(filtered_meta[[meta_col]],
+              out_arrow,
+              paste0("/Metadata/",meta_col))
+    }
   }
 }
 ```
