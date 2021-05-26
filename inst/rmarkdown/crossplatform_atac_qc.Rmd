@@ -251,9 +251,6 @@ stm(paste(c("Available references:", reference_names), collapse = " "))
 
 if(!qc_only) {
   
-  
-  
-  
   feature_mat_files <- list.files(in_pre, pattern = "sparse_matrix.tsv.gz", full.names = TRUE)
   feature_mat_names <- sub("_sparse_matrix.tsv.gz","", basename(feature_mat_files))
   feature_mat_names <- sub("[^_]+_", "", feature_mat_names)
@@ -377,45 +374,47 @@ walk(seq_along(cutoffs),
 
 #### Load Reference Datasets
 ```{r Load references}
-stm(paste("Loading reference region sets for", genome))
-
-reference_datasets <- map(reference_files,
-                          readRDS)
-
-gr_to_df <- function(gr) {
-  df <- data.frame(seqnames = seqnames(gr),
-                   start = start(gr),
-                   end = end(gr),
-                   strand = strand(gr))
+if(!qc_only) {
+  stm(paste("Loading reference region sets for", genome))
   
-  mc <- as.data.frame(mcols(gr)@listData)
+  reference_datasets <- map(reference_files,
+                            readRDS)
   
-  if(nrow(mc) == nrow(df)) {
-    cbind(df, mc)
-  } else {
-    df
+  gr_to_df <- function(gr) {
+    df <- data.frame(seqnames = seqnames(gr),
+                     start = start(gr),
+                     end = end(gr),
+                     strand = strand(gr))
+    
+    mc <- as.data.frame(mcols(gr)@listData)
+    
+    if(nrow(mc) == nrow(df)) {
+      cbind(df, mc)
+    } else {
+      df
+    }
+    
   }
   
-}
-
-reference_datasets <- map(reference_datasets, gr_to_df)
-
-names(reference_datasets) <- reference_names
-
-reference_meta <- map(seq_along(reference_datasets),
-                      function(x) {
-                        dt <- reference_datasets[[x]]
-                        reference_name = reference_names[x]
-                        meta <- data.frame(name = paste0(dt$seqnames, "_", dt$start, "_", dt$end),
-                                           id = paste0(genome, "_", reference_name, "_", 1:nrow(dt)))
-                        if(ncol(dt) > 5) {
-                          meta <- cbind(meta, dt[6:ncol(dt)])
-                        }
-                        
-                        as.list(meta)
-                      })
-
-names(reference_meta) <- reference_names
+  reference_datasets <- map(reference_datasets, gr_to_df)
+  
+  names(reference_datasets) <- reference_names
+  
+  reference_meta <- map(seq_along(reference_datasets),
+                        function(x) {
+                          dt <- reference_datasets[[x]]
+                          reference_name = reference_names[x]
+                          meta <- data.frame(name = paste0(dt$seqnames, "_", dt$start, "_", dt$end),
+                                             id = paste0(genome, "_", reference_name, "_", 1:nrow(dt)))
+                          if(ncol(dt) > 5) {
+                            meta <- cbind(meta, dt[6:ncol(dt)])
+                          }
+                          
+                          as.list(meta)
+                        })
+  
+  names(reference_meta) <- reference_names
+  }
 ```
 
 #### Load SampleSheet
@@ -670,135 +669,143 @@ fwrite(filtered_meta, filtered_meta_out)
 
 #### Read overlaps and output results
 ```{r Region Matrices}
-stm("Building reference matrices")
+if(!qc_only) {
+  stm("Building reference matrices")
 
-obs_list <- as.list(filtered_meta[,names(filtered_meta) != "barcodes"])
+  obs_list <- as.list(filtered_meta[,names(filtered_meta) != "barcodes"])
+  
+  walk(seq_along(feature_mat_files),
+       function(x) {
+         mat_file <- feature_mat_files[x]
+         mat_name <- feature_mat_names[x]
+         
+         n_features <- nrow(reference_datasets[[mat_name]])
+         
+         stm(paste("Building",mat_name,"matrix"))
+         
+         dt <- fread(mat_file,
+                     header = FALSE,
+                     col.names = c("original_barcodes",
+                                   "i",
+                                   "x"),
+                     colClasses = list("character" = 1,
+                                       "integer" = c(2,3)))
+         
+         dt <- dt[original_barcodes %in% filtered_meta$original_barcodes]
+         barcode_counts <- table(dt$original_barcodes)
+         new_barcodes <- filtered_meta$barcodes[match(names(barcode_counts), filtered_meta$original_barcodes)]
+         
+         mat_list <- list(matrix = list(barcodes = new_barcodes,
+                                        data = dt$x,
+                                        indices = dt$i - 1,
+                                        indptr = c(0, cumsum(barcode_counts)),
+                                        shape = c(n_features, nrow(filtered_meta)),
+                                        features = reference_meta[[mat_name]],
+                                        observations = obs_list))
+         rm(dt)
+         
+         out_file <- paste0(out_prefix, mat_name, ".h5")
+         stm(paste("Writing .h5 file to:", out_file))
+         write_h5_list(mat_list,
+                       out_file,
+                       overwrite = TRUE)
+         
+         rm(mat_list)
+       })
+}
 
-walk(seq_along(feature_mat_files),
-     function(x) {
-       mat_file <- feature_mat_files[x]
-       mat_name <- feature_mat_names[x]
-       
-       n_features <- nrow(reference_datasets[[mat_name]])
-       
-       stm(paste("Building",mat_name,"matrix"))
-       
-       dt <- fread(mat_file,
-                   header = FALSE,
-                   col.names = c("original_barcodes",
-                                 "i",
-                                 "x"),
-                   colClasses = list("character" = 1,
-                                     "integer" = c(2,3)))
-       
-       dt <- dt[original_barcodes %in% filtered_meta$original_barcodes]
-       barcode_counts <- table(dt$original_barcodes)
-       new_barcodes <- filtered_meta$barcodes[match(names(barcode_counts), filtered_meta$original_barcodes)]
-       
-       mat_list <- list(matrix = list(barcodes = new_barcodes,
-                                      data = dt$x,
-                                      indices = dt$i - 1,
-                                      indptr = c(0, cumsum(barcode_counts)),
-                                      shape = c(n_features, nrow(filtered_meta)),
-                                      features = reference_meta[[mat_name]],
-                                      observations = obs_list))
-       rm(dt)
-       
-       out_file <- paste0(out_prefix, mat_name, ".h5")
-       stm(paste("Writing .h5 file to:", out_file))
-       write_h5_list(mat_list,
-                     out_file,
-                     overwrite = TRUE)
-       
-       rm(mat_list)
-     })
 ```
 
 [Return to Contents](#contents)
 
 ### Window count matrices
 ```{r}
-stm("Building window matrices")
-window_sizes <- as.numeric(sub("window_([0-9]+)k","\\1",window_mat_names)) * 1000
-
-window_offsets <- map(window_sizes,
-                      function(size) {
-                        read_chrom_sizes(genome = genome,
-                                         window_size = size)
+if(!qc_only) {
+  stm("Building window matrices")
+  window_sizes <- as.numeric(sub("window_([0-9]+)k","\\1",window_mat_names)) * 1000
+  
+  window_offsets <- map(window_sizes,
+                        function(size) {
+                          read_chrom_sizes(genome = genome,
+                                           window_size = size)
+                        })
+  names(window_offsets) <- window_mat_names
+  
+  window_metas <- map(seq_along(window_offsets),
+                      function(x) {
+                        offsets <- window_offsets[[x]]
+                        window_mat_name <- window_mat_names[x]
+                        window_size <- window_sizes[x]
+                        
+                        region_bed <- window_index_to_bed(1:sum(offsets$n_windows),
+                                                          offsets,
+                                                          window_size = window_size)
+                        region_bed$start <- as.character(format(region_bed$start, scientific = FALSE))
+                        region_bed$end <- as.character(format(region_bed$end, scientific = FALSE))
+                        list(name = gsub(" +","",paste(region_bed$chr, region_bed$start, region_bed$end, sep = "_")),
+                             id = paste0(genome, "_", window_mat_name, "_", 1:nrow(region_bed)))
+                        
                       })
-names(window_offsets) <- window_mat_names
-
-window_metas <- map(seq_along(window_offsets),
-                    function(x) {
-                      offsets <- window_offsets[[x]]
-                      window_mat_name <- window_mat_names[x]
-                      window_size <- window_sizes[x]
-                      
-                      region_bed <- window_index_to_bed(1:sum(offsets$n_windows),
-                                                        offsets,
-                                                        window_size = window_size)
-                      region_bed$start <- as.character(format(region_bed$start, scientific = FALSE))
-                      region_bed$end <- as.character(format(region_bed$end, scientific = FALSE))
-                      list(name = gsub(" +","",paste(region_bed$chr, region_bed$start, region_bed$end, sep = "_")),
-                           id = paste0(genome, "_", window_mat_name, "_", 1:nrow(region_bed)))
-                      
-                    })
-names(window_metas) <- window_mat_names
+  names(window_metas) <- window_mat_names
+}
 ```
 
 #### Generate window matrices
 ```{r Window Matrices}
-walk(seq_along(window_mat_files),
-     function(x) {
-       window_mat_file <- window_mat_files[x]
-       window_mat_name <- window_mat_names[x]
-       window_size <- window_sizes[x]
-       
-       window_offsets <- window_offsets[[window_mat_name]]
-       window_meta <- window_metas[[window_mat_name]]
-       
-       stm(paste("Building",window_mat_name,"matrix"))
-       
-       dt <- fread(window_mat_file,
-                   header = FALSE,
-                   col.names = c("original_barcodes",
-                                 "chr",
-                                 "chr_i",
-                                 "x"),
-                   colClasses = list("character" = c(1,2),
-                                     "integer" = c(3,4)))
-       
-       dt <- dt[original_barcodes %in% filtered_meta$original_barcodes]
-       offsets <- window_offsets[,c("chr","offset")]
-       
-       dt <- dt[offsets, on = "chr"]
-       dt$i <- dt$chr_i + dt$offset
-       dt <- dt[!is.na(original_barcodes)]
-       dt <- setorder(dt, original_barcodes, i)
-       
-       barcode_counts <- table(dt$original_barcodes)
-       new_barcodes <- filtered_meta$barcodes[match(names(barcode_counts), filtered_meta$original_barcodes)]
-       
-       window_list <- list(matrix = list(barcodes = new_barcodes,
-                                         data = dt$x,
-                                         indices = dt$i - 1,
-                                         indptr = c(0, cumsum(barcode_counts)),
-                                         shape = c(sum(window_offsets$n_windows),
-                                                   nrow(filtered_meta)),
-                                         features = window_meta,
-                                         observations = obs_list))
-       rm(dt)
-       
-       window_list$matrix$observations <- as.list(filtered_meta)
-       
-       out_file <- paste0(out_prefix, window_mat_name, ".h5")
-       stm(paste("Writing .h5 file to:", out_file))
-       write_h5_list(window_list,
-                     out_file,
-                     overwrite = TRUE)
-       
-       rm(window_list)
-     })
+if(!qc_only) {
+  
+  walk(seq_along(window_mat_files),
+       function(x) {
+         window_mat_file <- window_mat_files[x]
+         window_mat_name <- window_mat_names[x]
+         window_size <- window_sizes[x]
+         
+         window_offsets <- window_offsets[[window_mat_name]]
+         window_meta <- window_metas[[window_mat_name]]
+         
+         stm(paste("Building",window_mat_name,"matrix"))
+         
+         dt <- fread(window_mat_file,
+                     header = FALSE,
+                     col.names = c("original_barcodes",
+                                   "chr",
+                                   "chr_i",
+                                   "x"),
+                     colClasses = list("character" = c(1,2),
+                                       "integer" = c(3,4)))
+         
+         dt <- dt[original_barcodes %in% filtered_meta$original_barcodes]
+         offsets <- window_offsets[,c("chr","offset")]
+         
+         dt <- dt[offsets, on = "chr"]
+         dt$i <- dt$chr_i + dt$offset
+         dt <- dt[!is.na(original_barcodes)]
+         dt <- setorder(dt, original_barcodes, i)
+         
+         barcode_counts <- table(dt$original_barcodes)
+         new_barcodes <- filtered_meta$barcodes[match(names(barcode_counts), filtered_meta$original_barcodes)]
+         
+         window_list <- list(matrix = list(barcodes = new_barcodes,
+                                           data = dt$x,
+                                           indices = dt$i - 1,
+                                           indptr = c(0, cumsum(barcode_counts)),
+                                           shape = c(sum(window_offsets$n_windows),
+                                                     nrow(filtered_meta)),
+                                           features = window_meta,
+                                           observations = obs_list))
+         rm(dt)
+         
+         window_list$matrix$observations <- as.list(filtered_meta)
+         
+         out_file <- paste0(out_prefix, window_mat_name, ".h5")
+         stm(paste("Writing .h5 file to:", out_file))
+         write_h5_list(window_list,
+                       out_file,
+                       overwrite = TRUE)
+         
+         rm(window_list)
+       })
+}
 ```
 
 [Return to Contents](#contents)
