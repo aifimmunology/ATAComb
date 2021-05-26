@@ -241,14 +241,18 @@ in_prefix <- file.path(in_pre, in_well)
 
 #### Check reference overlap files
 ```{r}
-if(!qc_only) {
-  reference_files <- list.files(system.file("reference", package = "ATAComb"), 
+reference_files <- list.files(system.file("reference", package = "ATAComb"), 
                                 pattern = paste0(genome, ".+gr.rds"),
                                 full.names = TRUE)
-  reference_names <- sub(paste0(".+",genome,"_"),"",reference_files)
-  reference_names <- sub("_gr.rds","",reference_names)
+reference_names <- sub(paste0(".+",genome,"_"),"",reference_files)
+reference_names <- sub("_gr.rds","",reference_names)
   
-  stm(paste(c("Available references:", reference_names), collapse = " "))
+stm(paste(c("Available references:", reference_names), collapse = " "))
+
+if(!qc_only) {
+  
+  
+  
   
   feature_mat_files <- list.files(in_pre, pattern = "sparse_matrix.tsv.gz", full.names = TRUE)
   feature_mat_names <- sub("_sparse_matrix.tsv.gz","", basename(feature_mat_files))
