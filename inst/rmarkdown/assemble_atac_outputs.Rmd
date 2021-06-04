@@ -168,7 +168,8 @@ if(!file.exists(in_meta)) {
 }
 
 in_prefix <- in_pre
-in_sample <- sub("_filtered_fragments.tsv.gz", "", basename(in_frag))
+in_sample <- sub("_fragments.tsv.gz", "", basename(in_frag))
+in_sample <- sub("_filtered", "", in_sample)
 
 stm(paste0("Using Sample Name:", in_sample))
 ```
