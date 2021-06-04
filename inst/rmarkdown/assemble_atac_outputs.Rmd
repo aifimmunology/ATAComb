@@ -191,11 +191,11 @@ stm(paste0("Using Output Prefix:", out_prefix))
 #### Check reference overlap files
 ```{r}
 reference_files <- list.files(system.file("reference", package = "ATAComb"), 
-                                pattern = paste0(genome, ".+gr.rds"),
-                                full.names = TRUE)
+                              pattern = paste0(genome, ".+gr.rds"),
+                              full.names = TRUE)
 reference_names <- sub(paste0(".+",genome,"_"),"",reference_files)
 reference_names <- sub("_gr.rds","",reference_names)
-  
+
 stm(paste(c("Available references:", reference_names), collapse = " "))
 
 feature_mat_files <- list.files(in_pre, pattern = "sparse_matrix.tsv.gz", full.names = TRUE)
@@ -640,8 +640,6 @@ out_json <- paste0(out_prefix, "atac_qc_metrics.json")
 
 #### Barcode QC Stats
 ```{r}
-#cutoffs <- list(altius_frac = 0.5, peaks_frac = 0.2, tss_frac = 0.2)
-
 barcode_conditions <- list(
   "pass_qc" = rep(TRUE, nrow(filtered_meta)),
   "doublets" = !filtered_meta$singlet,
@@ -695,8 +693,8 @@ frag_widths <- fread(frag_widths_file,
                                        "integer" = c(2,3)))
 
 frag_widths$singlet <- ifelse(frag_widths$barcodes %in% filtered_meta$barcodes[filtered_meta$singlet],
-                                "singlet",
-                                "doublet")
+                              "singlet",
+                              "doublet")
 frag_widths <- frag_widths[, sum(count), by = list(singlet, width)]
 names(frag_widths)[3] <- "totals"
 frag_widths <- frag_widths[, frac:=totals/sum(totals), by = list(singlet)]
@@ -724,6 +722,8 @@ ggplot(data = frag_widths) +
 
 #### Filtered QC Histograms
 ```{r}
+cutoffs <- list(altius_frac = 0.5, peaks_frac = 0.2, tss_frac = 0.2)
+
 n_reads_hist <- qc_hist_plot(filtered_meta,
                              column = "n_unique",
                              name_x = "N Unique Fragments per Cell",
