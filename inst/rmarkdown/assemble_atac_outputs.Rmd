@@ -102,15 +102,6 @@ if(is.null(params$in_pre)) {
   out_dir <- params$out_dir
 }
 
-in_well <- sub("-.?P","-AP",in_well)
-in_batch <- sub("-.+","",in_well)
-
-# Check Well ID format
-if(!grepl("^[A-Z|-]+[0-9]+-.?P[0-9]C[0-9]W[0-9]$", in_well)) {
-  stm(paste0("ERROR: Input Well ID is not in expected format, e.g. EXP###-AP#C#W# or B###-AP#C#W# :", in_h5))
-  stop()
-}
-
 # Check Genome
 if(!genome %in% c("hg38","hg19")) {
   stm(paste0("Genome must be 'hg38' or 'hg19'. Genome provided: ", genome))
@@ -176,7 +167,7 @@ if(!file.exists(in_meta)) {
   stop()
 }
 
-in_prefix <- file.path(in_pre, in_well)
+in_prefix <- in_pre
 in_sample <- sub("_filtered_fragments.tsv.gz", "", basename(in_frag))
 
 stm(paste0("Using Sample Name:", in_sample))
@@ -624,8 +615,7 @@ qc_list <- list(report_type = "atac_qc",
                 report_datetime = as.character(start_time),
                 report_uuid = ids::uuid(use_time = TRUE),
                 package = "ATAComb",
-                package_version = sessionInfo()$otherPkgs$ATAComb$Version,
-                well_id = in_well)
+                package_version = sessionInfo()$otherPkgs$ATAComb$Version)
 
 out_json <- paste0(out_prefix, "atac_qc_metrics.json")
 ```
