@@ -492,15 +492,15 @@ walk(seq_along(feature_mat_files),
        
        dt <- fread(mat_file,
                    header = FALSE,
-                   col.names = c("original_barcodes",
+                   col.names = c("barcodes",
                                  "i",
                                  "x"),
                    colClasses = list("character" = 1,
                                      "integer" = c(2,3)))
        
-       dt <- dt[original_barcodes %in% filtered_meta$original_barcodes]
-       barcode_counts <- table(dt$original_barcodes)
-       new_barcodes <- filtered_meta$barcodes[match(names(barcode_counts), filtered_meta$original_barcodes)]
+       dt <- dt[barcodes %in% filtered_meta$barcodes]
+       barcode_counts <- table(dt$barcodes)
+       new_barcodes <- filtered_meta$barcodes[match(names(barcode_counts), filtered_meta$barcodes)]
        
        mat_list <- list(matrix = list(barcodes = new_barcodes,
                                       data = dt$x,
@@ -568,23 +568,23 @@ walk(seq_along(window_mat_files),
        
        dt <- fread(window_mat_file,
                    header = FALSE,
-                   col.names = c("original_barcodes",
+                   col.names = c("barcodes",
                                  "chr",
                                  "chr_i",
                                  "x"),
                    colClasses = list("character" = c(1,2),
                                      "integer" = c(3,4)))
        
-       dt <- dt[original_barcodes %in% filtered_meta$original_barcodes]
+       dt <- dt[barcodes %in% filtered_meta$barcodes]
        offsets <- window_offsets[,c("chr","offset")]
        
        dt <- dt[offsets, on = "chr"]
        dt$i <- dt$chr_i + dt$offset
-       dt <- dt[!is.na(original_barcodes)]
-       dt <- setorder(dt, original_barcodes, i)
+       dt <- dt[!is.na(barcodes)]
+       dt <- setorder(dt, barcodes, i)
        
-       barcode_counts <- table(dt$original_barcodes)
-       new_barcodes <- filtered_meta$barcodes[match(names(barcode_counts), filtered_meta$original_barcodes)]
+       barcode_counts <- table(dt$barcodes)
+       new_barcodes <- filtered_meta$barcodes[match(names(barcode_counts), filtered_meta$barcodes)]
        
        window_list <- list(matrix = list(barcodes = new_barcodes,
                                          data = dt$x,
@@ -1017,11 +1017,11 @@ frag_widths_file <- list.files(in_pre, pattern = "_fragment_widths.tsv.gz", full
 
 frag_widths <- fread(frag_widths_file,
                      header = FALSE,
-                     col.names = c("original_barcodes", "width", "count"),
+                     col.names = c("barcodes", "width", "count"),
                      colClasses = list("character" = 1,
                                        "integer" = c(2,3)))
 
-frag_widths$pass_fail <- ifelse(frag_widths$original_barcodes %in% filtered_meta$original_barcodes,
+frag_widths$pass_fail <- ifelse(frag_widths$barcodes %in% filtered_meta$barcodes,
                                 "pass_qc",
                                 "fail_qc")
 frag_widths <- frag_widths[, sum(count), by = list(pass_fail, width)]
