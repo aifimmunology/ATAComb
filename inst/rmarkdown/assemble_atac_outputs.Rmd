@@ -134,7 +134,7 @@ print(c(
   paste0("IN  Genome                    : ", genome),
   paste0("IN  References                : ", refs),
   paste0("IN  Window Sizes              : ", window_sizes),
-  paste0("OUT Directory                 : ", out_dir),
+  paste0("OUT Directory                 : ", out_dir)
 ))
 ```
 
