@@ -125,6 +125,16 @@ stm(paste0("IN  Window Sizes              : ", window_sizes))
 stm(paste0("OUT Directory                 : ", out_dir))
 ```
 
+```{r}
+in_pre <- "/mnt/x070-multiome/hashing-pipeline-testing/PB1051W10/atac_preprocessed/"
+in_frag <- "/mnt/x070-multiome/hashing-pipeline-testing/atac_frag_merged/X070-P1_PB1051W10_fragments.tsv.gz"
+in_meta <- "/mnt/x070-multiome/hashing-pipeline-testing/atac_meta_merged/X070-P1_PB1051W10_filtered_metadata.csv.gz"
+genome <- "hg38"
+refs <- "all"
+window_sizes <- "all"
+out_dir <- "/mnt/x070-multiome/hashing-pipeline-testing/PB1051W10/atac_qc/"
+```
+
 #### Input Parameters
 ```{r Print Arguments}
 print(c(
@@ -630,16 +640,12 @@ out_json <- paste0(out_prefix, "atac_qc_metrics.json")
 
 #### Barcode QC Stats
 ```{r}
+#cutoffs <- list(altius_frac = 0.5, peaks_frac = 0.2, tss_frac = 0.2)
+
 barcode_conditions <- list(
-  "all" = rep(TRUE, nrow(meta)),
-  "pass_qc" = meta$altius_frac > cutoffs$altius_frac & meta$peaks_frac > cutoffs$peaks_frac & meta$tss_frac > cutoffs$tss_frac,
-  "fail_qc" = meta$altius_frac < cutoffs$altius_frac | meta$peaks_frac < cutoffs$peaks_frac | meta$tss_frac < cutoffs$tss_frac,
-  "fail_altius_frac" = meta$altius_frac < cutoffs$altius_frac,
-  "fail_peaks_frac" = meta$peaks_frac < cutoffs$peaks_frac,
-  "fail_tss_frac" = meta$tss_frac < cutoffs$tss_frac,
-  "fail_all" = meta$altius_frac < cutoffs$altius_frac & meta$peaks_frac < cutoffs$peaks_frac & meta$tss_frac < cutoffs$tss_frac,
-  "doublets" = meta$altius_frac > cutoffs$altius_frac & meta$peaks_frac > cutoffs$peaks_frac & meta$tss_frac > cutoffs$tss_frac & !meta$singlet,
-  "singlets" = meta$altius_frac > cutoffs$altius_frac & meta$peaks_frac > cutoffs$peaks_frac & meta$tss_frac > cutoffs$tss_frac & meta$singlet
+  "pass_qc" = rep(TRUE, nrow(filtered_meta)),
+  "doublets" = !filtered_meta$singlet,
+  "singlets" = filtered_meta$singlet
 )
 
 perc_of <- function(x, d) {
@@ -652,22 +658,16 @@ q_of <- function(x, target, q) {
 }
 
 barcode_qc_stats <- data.frame(
-  metric = c("Barcodes with > 1k reads",
-             "Barcodes pass QC",
-             "Barcodes fail QC",
-             "Barcodes fail altius_frac",
-             "Barcodes fail peaks_frac",
-             "Barcodes fail tss_frac",
-             "Barcodes fail all",
+  metric = c("Barcodes pass QC",
              "Doublets pass QC",
              "Singlets pass QC"),
   count = sapply(barcode_conditions, sum),
-  percent = sapply(barcode_conditions, perc_of, nrow(meta)),
-  median_fragments = sapply(barcode_conditions, q_of, meta$n_fragments, .50),
-  median_unique = sapply(barcode_conditions, q_of, meta$n_unique, .50),
-  median_altius_frac = sapply(barcode_conditions, q_of, meta$altius_frac, .50),
-  median_peaks_frac = sapply(barcode_conditions, q_of, meta$peaks_frac, .50),
-  median_tss_frac = sapply(barcode_conditions, q_of, meta$tss_frac, .50))
+  percent = sapply(barcode_conditions, perc_of, nrow(filtered_meta)),
+  median_fragments = sapply(barcode_conditions, q_of, filtered_meta$n_fragments, .50),
+  median_unique = sapply(barcode_conditions, q_of, filtered_meta$n_unique, .50),
+  median_altius_frac = sapply(barcode_conditions, q_of, filtered_meta$altius_frac, .50),
+  median_peaks_frac = sapply(barcode_conditions, q_of, filtered_meta$peaks_frac, .50),
+  median_tss_frac = sapply(barcode_conditions, q_of, filtered_meta$tss_frac, .50))
 
 qc_list$barcode_qc_stats <- as.list(barcode_qc_stats)
 qc_list$barcode_qc_stats$metric <- c("barcodes_gt1k","barcodes_pass_qc","barcodes_fail_qc",
@@ -678,336 +678,9 @@ qc_table(barcode_qc_stats)
 
 [Return to Contents](#contents)
 
-<a id="fragment_stats"></a>
-
-#### Fragment QC stats
-```{r}
-if(file.exists(in_sum)) {
-  metrics_summary <- read.csv(in_sum)
-  
-  saturation_counts_file <- list.files(in_pre, pattern = "_saturation_curve.tsv.gz", full.names = TRUE)
-  
-  saturation_counts <- fread(saturation_counts_file,
-                             header = F,
-                             col.names = c("count", "frequency"))
-  
-  saturation_counts$count <- as.numeric(sub("\\r","",saturation_counts$count))
-  
-  fragment_qc_stats <- data.frame(metric = c("Sequenced Fragments",
-                                             "Mitochondrial Fragments",
-                                             "Total in Barcodes with > 1k Reads",
-                                             "Total in Barcodes passing QC",
-                                             "Total in Barcodes failing QC",
-                                             "Total Unique",
-                                             "Unique in Barcodes with > 1k Reads",
-                                             "Unique in Barcodes passing QC",
-                                             "Unique in Barcodes failing QC"),
-                                  count = c(metrics_summary$num_fragments,
-                                            ceiling(metrics_summary$num_fragments * metrics_summary$frac_waste_mitochondrial),
-                                            sum(meta$n_fragments),
-                                            sum(filtered_meta$n_fragments),
-                                            sum(meta$n_fragments) - sum(filtered_meta$n_fragments),
-                                            sum(saturation_counts$frequency),
-                                            sum(meta$n_unique),
-                                            sum(filtered_meta$n_unique),
-                                            sum(meta$n_unique) - sum(filtered_meta$n_unique)))
-  fragment_qc_stats$millions <- round(fragment_qc_stats$count / 1e6, 2)
-  fragment_qc_stats$percent_of_sequenced <- round(fragment_qc_stats$count / fragment_qc_stats$count[1] * 100, 2)
-  fragment_qc_stats$percent_of_unique <- round(fragment_qc_stats$count / sum(saturation_counts$frequency) * 100, 2)
-  fragment_qc_stats$percent_of_unique[1:5] <- NA
-  
-  qc_list$fragment_qc_stats <- as.list(fragment_qc_stats)
-  qc_list$fragment_qc_stats$metric <- c("total_frags","mito_frags",
-                                        "total_frags_gt1k","total_frags_pass_qc","total_frags_fail_qc",
-                                        "unique_frags","unique_frags_gt1k","unique_frags_pass_qc","unique_frags_fail_qc")
-} else {
-  saturation_counts <- fread(paste0(in_prefix, "_saturation_curve.tsv.gz"),
-                             header = F,
-                             col.names = c("count", "frequency"))
-  saturation_counts$count <- as.numeric(sub("\\r","",saturation_counts$count))
-  
-  fragment_qc_stats <- data.frame(metric = c("Total Unique",
-                                             "Unique in Barcodes with > 1k Reads",
-                                             "Unique in Barcodes passing QC",
-                                             "Unique in Barcodes failing QC"),
-                                  count = c(sum(saturation_counts$frequency),
-                                            sum(meta$n_unique),
-                                            sum(filtered_meta$n_unique),
-                                            sum(meta$n_unique) - sum(filtered_meta$n_unique)))
-  fragment_qc_stats$millions <- round(fragment_qc_stats$count / 1e6, 2)
-  fragment_qc_stats$percent_of_unique <- round(fragment_qc_stats$count / sum(saturation_counts$frequency) * 100, 2)
-  
-  qc_list$fragment_qc_stats <- as.list(fragment_qc_stats)
-  qc_list$fragment_qc_stats$metric <- c("unique_frags","unique_frags_gt1k","unique_frags_pass_qc","unique_frags_fail_qc")
-}
-
-qc_table(fragment_qc_stats)
-```
-
-[Return to Contents](#contents)
-
-<a id="saturation_stats"></a>
-
-#### Saturation metrics
-```{r}
-if(file.exists(in_sum)) {
-  stm("Generating library diversity projection")
-  
-  saturation_mat <- as.matrix(as.data.frame(saturation_counts))
-  
-  total_metrics <- data.frame(total_reads = metrics_summary$num_fragments,
-                              total_umis = metrics_summary$total_usable_fragments,
-                              total_counts = sum(saturation_mat[,"count"] * saturation_mat[,"frequency"]))
-  
-  saturation_projection <- suppressWarnings(
-    diversity_projection(saturation_mat,
-                         total_metrics,
-                         max_val = 2e9)
-  )
-  
-  saturation_projection$type <- ifelse(saturation_projection$n_raw_reads < total_metrics$total_reads,
-                                       "actual",
-                                       "projected")
-  
-  saturation_projection$ratio <- saturation_projection$n_raw_reads/saturation_projection$expected_umis
-  saturation_projection$ratio[1] <- 0
-  
-  # Signal UMIs: UMIs in cells passing QC in peaks
-  saturation_projection$signal_umis <- floor(saturation_projection$expected_umis * 
-                                               fragment_qc_stats$percent_of_unique[fragment_qc_stats$metric == "Unique in Barcodes passing QC"] / 100 *
-                                               sum(filtered_meta$peaks_count) / sum(filtered_meta$n_unique))
-  
-  saturation_projection$signal_ratio <- saturation_projection$n_raw_reads / saturation_projection$signal_umis
-  saturation_projection$signal_ratio[1] <- 0
-  
-  # Precomputing millions of reads for display
-  saturation_projection$M_raw_reads <- round(saturation_projection$n_raw_reads/1e6, 2)
-  saturation_projection$M_umis <- round(saturation_projection$expected_umis/1e6, 2)
-  saturation_projection$M_signal_umis <- round(saturation_projection$signal_umis/1e6,2)
-}
-```
-
-#### Output projection values
-```{r}
-if(file.exists(in_sum)){
-  out_proj <- paste0(out_prefix, "saturation_projection.csv.gz")
-
-  stm(paste("Writing Saturation Projection to", out_proj))
-  print(paste("Writing Saturation Projection to", out_proj))
-  
-  fwrite(saturation_projection,
-         out_proj)
-}
-```
-
-#### Compute Break-points for specific ratios of raw reads to UMIs or signal UMIs
-```{r}
-if(file.exists(in_sum)) {
-  # 2:1, 3:1, and 4:1 break points for total UMIs
-  saturation_break_idx <- sapply(2:4, function(x) which.min(abs(saturation_projection$ratio-x)))
-  
-  saturation_breaks <- saturation_projection[saturation_break_idx,]
-  saturation_breaks$label <- c("2:1","3:1","4:1")
-  saturation_breaks$value <- c(2:4)
-  
-  # Filter out breaks that are nearest, but not very close to the actual break value
-  # removes things like adding a break at the final point even if it doesn't reach 4:1
-  saturation_breaks <- saturation_breaks[abs(saturation_breaks$value - saturation_breaks$ratio) < 0.1,]
-  
-  # 4:1, 8:1, and 16:1 break points for signal UMIs
-  signal_break_idx <- sapply(c(4,8,16), function(x) which.min(abs(saturation_projection$signal_ratio-x)))
-  
-  signal_breaks <- saturation_projection[signal_break_idx,]
-  signal_breaks$label <- c("2:1","4:1","16:1")
-  signal_breaks$value <- c(4,8,16)
-  
-  signal_breaks <- signal_breaks[abs(signal_breaks$value - signal_breaks$signal_ratio) < 0.1,]
-}
-```
-
-#### Display Break points for saturation of UMIs
-```{r}
-if(file.exists(in_sum)) {
-  # Abbreviated table for display
-  saturation_qc <- data.frame(break_target = saturation_breaks$value,
-                              umi_ratio = round(saturation_breaks$ratio,2),
-                              M_raw_reads = saturation_breaks$M_raw_reads,
-                              M_umis = saturation_breaks$M_umis,
-                              M_signal_umis = saturation_breaks$M_signal_umis)
-  
-  qc_list$saturation <- list()
-  qc_list$saturation$umi_breaks <- as.list(saturation_qc)
-  
-  qc_table(saturation_qc)
-}
-```
-
-#### Display Break points for saturation of signal UMIs
-```{r}
-if(file.exists(in_sum)) {
-  signal_qc <- data.frame(break_target = signal_breaks$value,
-                          signal_ratio = round(signal_breaks$signal_ratio, 2),
-                          M_raw_reads = signal_breaks$M_raw_reads,
-                          M_umis = signal_breaks$M_umis,
-                          M_signal_umis = signal_breaks$M_signal_umis)
-  
-  qc_list$saturation$signal_breaks <- as.list(signal_qc)
-  
-  qc_table(signal_qc)
-}
-```
-
-#### Saturation summary by sequencing depth
-```{r}
-if(file.exists(in_sum)) {
-  regular_break_idx <- which(saturation_projection$M_raw_reads %in% seq(200, 2000, by = 200))
-  
-  regular_qc <- data.frame(umi_ratio = round(saturation_projection$ratio[regular_break_idx], 2),
-                           signal_ratio = round(saturation_projection$signal_ratio[regular_break_idx], 2),
-                           M_raw_reads = saturation_projection$M_raw_reads[regular_break_idx],
-                           M_umis = saturation_projection$M_umis[regular_break_idx],
-                           M_signal_umis = saturation_projection$M_signal_umis[regular_break_idx])
-  
-  qc_list$saturation$raw_breaks <- as.list(regular_qc)
-  
-  qc_table(regular_qc)
-}
-```
-
-[Return to Contents](#contents)
-
-<a id="tenx_stats"></a>
-
-#### 10x Metrics
-```{r}
-if(file.exists(in_sum)) {
-  tenx_metrics <- data.frame(metric = names(metrics_summary),
-                             values = round(unlist(as.numeric(metrics_summary[1,])), 4))
-  
-  qc_list$tenx_metrics <- as.list(metrics_summary)
-  
-  qc_table(tenx_metrics)
-}
-```
-
-[Return to Contents](#contents)
-
 <a id="qc_plots"></a>
 
 ### QC Plots
-
-<a id="saturation_plot"></a>
-
-#### Plot Library Saturation
-```{r}
-if(file.exists(in_sum)) {
-  reference_projections <- fread(system.file("reference/saturation/reference_projections.csv",
-                                             package = "ATAComb"))
-  reference_projections$dataset <- paste0("ref_",reference_projections$dataset)
-  
-  umi_saturation_plot <- ggplot() +
-    geom_line(data = reference_projections,
-              aes(x = n_raw_reads,
-                  y = expected_umis,
-                  group = dataset,
-                  color = dataset)) +
-    geom_line(data = saturation_projection,
-              aes(x = n_raw_reads,
-                  y = expected_umis,
-                  group = type,
-                  color = type),
-              size = 2)  +
-    scale_color_brewer("Data Type",
-                       type = "qual",
-                       palette = 2) +
-    scale_x_continuous("N Raw Reads (millions)",
-                       expand = c(0,0),
-                       breaks = seq(0, 2e9, by = 2.5e8),
-                       labels = seq(0, 2000, by = 250)) +
-    scale_y_continuous("N Unique Fragments (millions)", 
-                       expand = c(0,0),
-                       limits = c(0, 7.5e8),
-                       breaks = seq(0, 7.5e8, by = 2.5e8),
-                       labels = seq(0, 750, by = 250)) +
-    theme_bw() +
-    theme(panel.grid.minor = element_blank())
-  
-  if(nrow(saturation_breaks) > 0) {
-    umi_saturation_plot <- umi_saturation_plot +
-      geom_segment(data = saturation_breaks,
-                   aes(x = 0, xend = n_raw_reads,
-                       y = expected_umis, yend = expected_umis),
-                   linetype="dashed") +
-      geom_segment(data = saturation_breaks,
-                   aes(x = n_raw_reads, xend = n_raw_reads,
-                       y = 0, yend = expected_umis),
-                   linetype="dashed") +
-      geom_text(data = saturation_breaks,
-                aes(x = n_raw_reads, y = expected_umis + 1e7,
-                    label = label),
-                hjust = 0,
-                vjust = 0)
-  }
-  
-  umi_saturation_plot
-}
-```
-
-[Return to Contents](#contents)
-
-<a id="signal_plot"></a>
-
-#### Plot saturation of signal UMIs
-```{r}
-if(file.exists(in_sum)) {
-  signal_saturation_plot <- ggplot() +
-    geom_line(data = reference_projections,
-              aes(x = n_raw_reads,
-                  y = signal_umis,
-                  group = dataset,
-                  color = dataset)) +
-    geom_line(data = saturation_projection,
-              aes(x = n_raw_reads,
-                  y = signal_umis,
-                  group = type,
-                  color = type),
-              size = 2) +
-    scale_color_brewer("Data Type",
-                       type = "qual",
-                       palette = 2) +
-    scale_x_continuous("N Raw Reads (millions)",
-                       expand = c(0,0),
-                       breaks = seq(0, 2e9, by = 2.5e8),
-                       labels = seq(0, 2000, by = 250)) +
-    scale_y_continuous("N Unique Fragments in Peaks (millions)", 
-                       expand = c(0,0),
-                       limits = c(0, 2e8),
-                       breaks = seq(0, 2e8, by = 2.5e7),
-                       labels = seq(0, 200, by = 25)) +
-    theme_bw() +
-    theme(panel.grid.minor = element_blank())
-  
-  if(nrow(signal_breaks) > 0) {
-    signal_saturation_plot <- signal_saturation_plot +
-      geom_segment(data = signal_breaks,
-                   aes(x = 0, xend = n_raw_reads,
-                       y = signal_umis, yend = signal_umis),
-                   linetype="dashed") +
-      geom_segment(data = signal_breaks,
-                   aes(x = n_raw_reads, xend = n_raw_reads,
-                       y = 0, yend = signal_umis),
-                   linetype="dashed") +
-      geom_text(data = signal_breaks,
-                aes(x = n_raw_reads, y = signal_umis + 5e6,
-                    label = label),
-                vjust = 0)
-  }
-  
-  signal_saturation_plot
-}
-```
-
-[Return to Contents](#contents)
 
 <a id="width_plot"></a>
 
@@ -1021,12 +694,12 @@ frag_widths <- fread(frag_widths_file,
                      colClasses = list("character" = 1,
                                        "integer" = c(2,3)))
 
-frag_widths$pass_fail <- ifelse(frag_widths$barcodes %in% filtered_meta$barcodes,
-                                "pass_qc",
-                                "fail_qc")
-frag_widths <- frag_widths[, sum(count), by = list(pass_fail, width)]
+frag_widths$singlet <- ifelse(frag_widths$barcodes %in% filtered_meta$barcodes[filtered_meta$singlet],
+                                "singlet",
+                                "doublet")
+frag_widths <- frag_widths[, sum(count), by = list(singlet, width)]
 names(frag_widths)[3] <- "totals"
-frag_widths <- frag_widths[, frac:=totals/sum(totals), by = list(pass_fail)]
+frag_widths <- frag_widths[, frac:=totals/sum(totals), by = list(singlet)]
 frag_widths <- frag_widths[width <= 750]
 
 out_widths <- paste0(out_prefix, "fragment_width_summary.csv.gz") 
@@ -1037,125 +710,12 @@ fwrite(frag_widths, out_widths)
 ggplot(data = frag_widths) +
   geom_line(aes(x = width,
                 y = frac,
-                group = pass_fail,
-                color = pass_fail),
+                group = singlet,
+                color = singlet),
             size = 1) +
   xlim(0, 750) +
-  facet_grid(rows = vars(pass_fail)) +
+  facet_grid(rows = vars(singlet)) +
   theme_bw()
-```
-
-[Return to Contents](#contents)
-
-<a id="all_hist_plot"></a>
-
-#### Histograms for all cells
-```{r}
-n_reads_hist <- qc_hist_plot(meta,
-                             column = "n_unique",
-                             name_x = "N Unique Fragments per Cell",
-                             log_x = TRUE,
-                             fill = "dodgerblue",
-                             target = 2500,
-                             y_max = 1000)
-altius_frac_hist <- qc_frac_hist_plot(meta,
-                                      column = "altius_frac",
-                                      name_x = "Frac Reads in Altius Index (altius_frac)",
-                                      fill = "darkgreen",
-                                      target = cutoffs$altius_frac,
-                                      y_max = 8000)
-peaks_frac_hist <- qc_frac_hist_plot(meta,
-                                     column = "peaks_frac",
-                                     name_x = "Frac Reads in Peaks (peaks_frac)",
-                                     fill = "mediumorchid3",
-                                     target = cutoffs$peaks_frac,
-                                     y_max = 5000)
-tss_frac_hist <- qc_frac_hist_plot(meta,
-                                   column = "tss_frac",
-                                   name_x = "Frac Reads in TSS (tss_frac)",
-                                   fill = "orangered",
-                                   target = cutoffs$tss_frac,
-                                   y_max = 5000)
-plot_list <- list(n_reads_hist,
-                  altius_frac_hist,
-                  peaks_frac_hist,
-                  tss_frac_hist)
-
-cowplot::plot_grid(plotlist = plot_list,
-                   nrow = 4, ncol = 1)
-```
-
-[Return to Contents](#contents)
-
-<a id="reads_altius_frac_plot"></a>
-
-#### Reads vs altius_frac scatter
-```{r}
-qc_scatter_plot(meta,
-                column_x = "n_unique",
-                name_x = "N Unique Fragments per Cell",
-                column_y = "altius_frac",
-                name_y = "Frac Fragments in Altius Index (altius_frac)",
-                log_x = TRUE, log_y = FALSE, frac_y = TRUE,
-                show_targets = FALSE,
-                color = "darkgreen") +
-  geom_vline(aes(xintercept = 2.5e3), linetype = "dashed", size = 0.2) +
-  geom_hline(aes(yintercept = cutoffs$altius_frac), linetype = "dashed", size = 0.2)
-```
-
-
-[Return to Contents](#contents)
-
-<a id="reads_peaks_frac_plot"></a>
-
-#### Reads vs peaks_frac scatter
-```{r}
-qc_scatter_plot(meta,
-                column_x = "n_unique",
-                name_x = "N Unique Fragments per Cell",
-                column_y = "peaks_frac",
-                name_y = "Frac Fragments in Peaks (peaks_frac)",
-                log_x = TRUE, log_y = FALSE, frac_y = TRUE,
-                show_targets = FALSE,
-                color = "darkgreen") +
-  geom_vline(aes(xintercept = 2.5e3), linetype = "dashed", size = 0.2) +
-  geom_hline(aes(yintercept = cutoffs$peaks_frac), linetype = "dashed", size = 0.2)
-```
-
-
-[Return to Contents](#contents)
-
-<a id="peaks_frac_tss_frac_plot"></a>
-
-#### peaks_frac vs tss_frac scatter
-```{r}
-qc_scatter_plot(meta,
-                column_x = "peaks_frac",
-                name_x = "Frac Reads in Peaks (peaks_frac)",
-                column_y = "tss_frac",
-                name_y = "Frac Reads in TSS (tss_frac)",
-                log_x = FALSE, frac_x = TRUE, log_y = FALSE, frac_y = TRUE,
-                show_targets = FALSE,
-                color = "mediumorchid3") +
-  geom_vline(aes(xintercept = cutoffs$tss_frac), linetype = "dashed", size = 0.2) +
-  geom_hline(aes(yintercept = cutoffs$peaks_frac), linetype = "dashed", size = 0.2)
-```
-
-
-[Return to Contents](#contents)
-
-<a id="rip_ritss_plot"></a>
-
-#### RIP vs RITSS scatter
-```{r}
-qc_scatter_plot(meta,
-                column_x = "peaks_count",
-                name_x = "N Reads in Peaks (peaks_frac)",
-                column_y = "tss_count",
-                name_y = "N Reads in TSS (tss_frac)",
-                log_x = TRUE, frac_x = FALSE, log_y = TRUE, frac_y = FALSE,
-                show_targets = TRUE,
-                color = "orangered")
 ```
 
 [Return to Contents](#contents)
