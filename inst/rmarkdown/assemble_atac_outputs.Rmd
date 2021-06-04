@@ -125,16 +125,6 @@ stm(paste0("IN  Window Sizes              : ", window_sizes))
 stm(paste0("OUT Directory                 : ", out_dir))
 ```
 
-```{r}
-in_pre <- "/mnt/x070-multiome/hashing-pipeline-testing/PB1051W10/atac_preprocessed/"
-in_frag <- "/mnt/x070-multiome/hashing-pipeline-testing/atac_frag_merged/X070-P1_PB1051W10_fragments.tsv.gz"
-in_meta <- "/mnt/x070-multiome/hashing-pipeline-testing/atac_meta_merged/X070-P1_PB1051W10_filtered_metadata.csv.gz"
-genome <- "hg38"
-refs <- "all"
-window_sizes <- "all"
-out_dir <- "/mnt/x070-multiome/hashing-pipeline-testing/PB1051W10/atac_qc/"
-```
-
 #### Input Parameters
 ```{r Print Arguments}
 print(c(
