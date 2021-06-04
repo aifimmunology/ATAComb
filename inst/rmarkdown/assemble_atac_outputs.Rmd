@@ -172,6 +172,10 @@ in_sample <- sub("_fragments.tsv.gz", "", basename(in_frag))
 in_sample <- sub("_filtered", "", in_sample)
 
 stm(paste0("Using Sample Name:", in_sample))
+
+out_prefix <- file.path(out_dir, in_sample)
+
+stm(paste0("Using Output Prefix:", out_prefix))
 ```
 
 #### Check reference overlap files
