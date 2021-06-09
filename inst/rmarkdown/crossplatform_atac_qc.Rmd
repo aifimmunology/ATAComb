@@ -441,16 +441,25 @@ out_prefix <- file.path(out_dir, paste0(in_batch, "_", in_sample, "_"))
 ```{r}
 stm(paste0("Reading 10x metadata from ", in_sin))
 
-if(grepl("singlecell.csv", in_sin)) {
+if(grepl("arc_singlecell.csv$", in_sin)) {
+  stm("Reading arc_singlecell.csv")
+  # Arc singlecell.csv after preprocessing: has UUID barcodes in the 'cell_id' column.
   tenx_meta <- fread(in_sin)[-1,]
   tenx_meta <- tenx_meta[, list(cell_id, barcode, total, duplicate, mitochondrial , passed_filters)]
   names(tenx_meta) <- c("barcodes","original_barcodes","n_fragments","n_duplicate","n_mito","n_unique")
-} else if(grepl("barcode_counts.tsv", in_sin)) {
-  stm("Using barcode_counts.tsv")
+} else if(grepl("barcode_counts.tsv$", in_sin)) {
+  stm("Reading barcode_counts.tsv")
+  # barcode_counts.tsv: simple barcode counts
   tenx_meta <- fread(in_sin)
   names(tenx_meta) <- c("original_barcodes", "n_fragments")
   tenx_meta$n_unique <- tenx_meta$n_fragments
   tenx_meta$barcodes <- "None"
+} else {
+  # Else condition is cellranger-atac singlecell.csv: No 'cell_id' column. Add "None" to trigger UUID generation below.
+  tenx_meta <- fread(in_sin)[-1,]
+  tenx_meta$cell_id <- "None"
+  tenx_meta <- tenx_meta[, list(cell_id, barcode, total, duplicate, mitochondrial , passed_filters)]
+  names(tenx_meta) <- c("cell_id","original_barcodes","n_fragments","n_duplicate","n_mito","n_unique")
 }
 ```
 
