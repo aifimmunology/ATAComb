@@ -459,7 +459,7 @@ if(grepl("arc_singlecell.csv$", in_sin)) {
   tenx_meta <- fread(in_sin)[-1,]
   tenx_meta$cell_id <- "None"
   tenx_meta <- tenx_meta[, list(cell_id, barcode, total, duplicate, mitochondrial , passed_filters)]
-  names(tenx_meta) <- c("cell_id","original_barcodes","n_fragments","n_duplicate","n_mito","n_unique")
+  names(tenx_meta) <- c("barcodes","original_barcodes","n_fragments","n_duplicate","n_mito","n_unique")
 }
 ```
 
