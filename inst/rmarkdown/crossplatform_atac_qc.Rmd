@@ -933,9 +933,6 @@ if(pipeline_type %in% c("arc_v1","atac_v1")) {
 
 ```{r}
 if(pipeline_type %in% c("arc_v1","atac_v1","atac_v2")) {
-  
-
-  
   saturation_counts_file <- list.files(in_pre, pattern = "_saturation_curve.tsv.gz", full.names = TRUE)
   
   saturation_counts <- fread(saturation_counts_file,
