@@ -918,14 +918,9 @@ if(pipeline_type %in% c("arc_v1","atac_v1")) {
   metrics_summary <- read.csv(in_sum)
 } else if(pipeline_type == "atac_v2") {
   metrics_summary <- read.csv(in_sum)
-  metrics_summary$num_fragments <- metrics_summary[["Pre-Normalization total mapped read pairs"]]
-  
-  # No frac_waste_mitochondrial from cellranger-atac v2.0
-  metrics_summary$frac_waste_mitochondrial <- 0
-  stm("WARNING: Mitochondrial fragments not computed for cellranger-atac v2.0")
-  warning("WARNING: Mitochondrial fragments not computed for cellranger-atac v2.0")
-  
-  metrics_summary$total_usable_fragments <- metrics_summary[["Pre-Normalization unique fragments in library"]]
+  metrics_summary$num_fragments <- metrics_summary$Sequenced.read.pairs
+  metrics_summary$frac_waste_mitochondrial <- metrics_summary$Non.nuclear
+  metrics_summary$total_usable_fragments <- floor(metrics_summary$num_fragments * (1 - metrics_summary$Percent.duplicates))
 }
 ```
 
