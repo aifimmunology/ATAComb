@@ -109,14 +109,13 @@ if(is.null(params$in_pre)) {
   out_dir <- params$out_dir
 }
 
-in_well <- sub("-.?P","-AP",in_well)
-in_batch <- sub("-.+","",in_well)
-
 # Check Well ID format
 if(!grepl("^[A-Z|-]+[0-9]+-.?P[0-9]C[0-9]W[0-9]$", in_well)) {
   stm(paste0("ERROR: Input Well ID is not in expected format, e.g. EXP###-AP#C#W# or B###-AP#C#W# :", in_h5))
   stop()
 }
+
+in_batch <- sub("-.?P.+","",in_well)
 
 # Check Genome
 if(!genome %in% c("hg38","hg19")) {
@@ -176,11 +175,11 @@ addArchRGenome(genome)
 ```{r Check Inputs}
 if(!dir.exists(in_pre)) {
   stm(paste0("ERROR: Cannot find IN preprocessed dir:", in_pre))
-  stop()
+  stop("ERROR: Cannot find IN preprocessed dir")
 }
 if(!dir.exists(in_tenx)) {
   stm(paste0("ERROR: Cannot find IN 10x outputs:", in_tenx))
-  stop()
+  stop("ERROR: Cannot find IN 10x outputs")
 } else {
   
   arc_sin <- file.path(in_tenx, "arc_singlecell.csv")
@@ -190,44 +189,61 @@ if(!dir.exists(in_tenx)) {
   if(file.exists(arc_sin)) {
     stm(paste("Found Arc arc_singlecell.csv file:", arc_sin))
     in_sin <- arc_sin
+    
+    stm("Setting Pipeline Type as arc_v1")
+    pipeline_type <- "arc_v1"
   } else if(file.exists(atac_sin)) {
     stm(paste("Found ATAC singlecell.csv file:", atac_sin))
     in_sin <- atac_sin
+    
+    # Check pipeline
+    
+    sin_header <- as.vector(read.csv(in_sin, nrows = 1, header = FALSE))
+    
+    if("nonprimary" %in% sin_header) {
+      stm("Setting Pipeline Type as atac_v2")
+      pipeline_type <- "atac_v2"
+    } else {
+      stm("Setting Pipeline Type as atac_v1")
+      pipeline_type <- "atac_v1"
+    }
+    
   } else if(file.exists(bc_sin)) {
     stm(paste("Found barcode_counts.tsv file:", bc_sin))
     in_sin <- bc_sin
+    
+    stm("Setting Pipeline Type as non_cr")
+    pipeline_type <- "non_cr"
   } else {
     stm(paste("ERROR: Cannot find singlecell.csv file in", in_tenx))
-    stop()
+    stop("ERROR: Cannot find singlecell.csv file")
   }
   
-  arc_sum <- file.path(in_tenx, "atac_summary.csv")
-  atac_sum <- file.path(in_tenx, "summary.csv")
-  
-  if(file.exists(arc_sum)) {
-    stm(paste("Found Arc summary.csv file:", arc_sum))
-    in_sum <- arc_sum
-  } else if(file.exists(atac_sum)) {
-    stm(paste("Found ATAC summary.csv file:", atac_sum))
-    in_sum <- atac_sum
+  if(pipeline_type == "arc_v1") {
+    in_sum <- file.path(in_tenx, "atac_summary.csv")
+  } else {
+    in_sum <- file.path(in_tenx, "summary.csv")
+  }
+
+  if(file.exists(in_sum)) {
+    stm(paste("Found summary.csv file:", in_sum))
   } else {
     in_sum <- NULL
     stm(paste("WARNING: Cannot find summary.csv file in", in_tenx))
     stm("WARNING: Some QC metrics will not be calculated")
   }
   
-  arc_frag <- file.path(in_tenx, "atac_fragments.tsv.gz")
-  atac_frag <- file.path(in_tenx, "fragments.tsv.gz")
-  
-  if(file.exists(arc_frag)) {
-    stm(paste("Found Arc fragments.tsv.gz file:", arc_frag))
-    in_frag <- arc_frag
-  } else if(file.exists(atac_frag)) {
-    stm(paste("Found ATAC fragments.tsv.gz file:", atac_frag))
-    in_frag <- atac_frag
+  if(pipeline_type == "arc_v1") {
+    in_frag <- file.path(in_tenx, "atac_fragments.tsv.gz")
   } else {
-    stm(paste0("ERROR: Cannot find 10x fragments.tsv.gz:", in_tenx))
-    stop()
+    in_frag <- file.path(in_tenx, "fragments.tsv.gz")
+  }
+  
+  if(file.exists(in_frag)) {
+    stm(paste("Found fragments.tsv.gz file:", in_frag))
+  } else {
+    stm(paste0("ERROR: Cannot find fragments.tsv.gz:", in_tenx))
+    stop("ERROR: Cannot find fragments.tsv.gz")
   }
 }
 
@@ -441,26 +457,26 @@ out_prefix <- file.path(out_dir, paste0(in_batch, "_", in_sample, "_"))
 ```{r}
 stm(paste0("Reading 10x metadata from ", in_sin))
 
-if(grepl("arc_singlecell.csv$", in_sin)) {
+if(pipeline_type == "arc_v1") {
   stm("Reading arc_singlecell.csv")
   # Arc singlecell.csv after preprocessing: has UUID barcodes in the 'cell_id' column.
   tenx_meta <- fread(in_sin)[-1,]
   tenx_meta <- tenx_meta[, list(cell_id, barcode, total, duplicate, mitochondrial , passed_filters)]
   names(tenx_meta) <- c("barcodes","original_barcodes","n_fragments","n_duplicate","n_mito","n_unique")
-} else if(grepl("barcode_counts.tsv$", in_sin)) {
+} else if(pipeline_type %in% c("atac_v1", "atac_v2")) {
+  # cellranger-atac singlecell.csv: No 'cell_id' column. Add "None" to trigger UUID generation below.
+  tenx_meta <- fread(in_sin)[-1,]
+  tenx_meta$cell_id <- "None"
+  tenx_meta <- tenx_meta[, list(cell_id, barcode, total, duplicate, mitochondrial , passed_filters)]
+  names(tenx_meta) <- c("barcodes","original_barcodes","n_fragments","n_duplicate","n_mito","n_unique")
+} else if(pipeline_type == "non_cr") {
   stm("Reading barcode_counts.tsv")
   # barcode_counts.tsv: simple barcode counts
   tenx_meta <- fread(in_sin)
   names(tenx_meta) <- c("original_barcodes", "n_fragments")
   tenx_meta$n_unique <- tenx_meta$n_fragments
   tenx_meta$barcodes <- "None"
-} else {
-  # Else condition is cellranger-atac singlecell.csv: No 'cell_id' column. Add "None" to trigger UUID generation below.
-  tenx_meta <- fread(in_sin)[-1,]
-  tenx_meta$cell_id <- "None"
-  tenx_meta <- tenx_meta[, list(cell_id, barcode, total, duplicate, mitochondrial , passed_filters)]
-  names(tenx_meta) <- c("barcodes","original_barcodes","n_fragments","n_duplicate","n_mito","n_unique")
-}
+} 
 ```
 
 ```{r}
@@ -492,10 +508,9 @@ for(i in seq_along(ref_counts)) {
 ```{r Generate IDs}
 stm("Generating Cell IDs")
 
-# cellranger-atac uses "None" in cell_ids
+# cellranger-atac and non-cellranger will have "None" in barcodes column
 # cellranger-arc metadata that's been pre-processed will already have UUIds in this column.
-# barcode_counts.tsv-based datasets will have "None" filled into the barcodes column.
-if(tenx_meta$barcodes[1] == "None") {
+if(pipeline_type %in% c("atac_v1", "atac_v2", "non_cr")) {
     tenx_meta$barcodes <- ids::uuid(nrow(tenx_meta),
                                     drop_hyphens = TRUE, 
                                     use_time = TRUE)
@@ -510,9 +525,13 @@ meta$cell_name <- ids::adjective_animal(nrow(meta),
 ```{r}
 stm("Adding Batch and Sample ID metadata")
 meta$well_id <- in_well
+meta$pool_id <- sub("C[0-9]W[0-9]+$","",meta$well_id)
 meta$chip_id <- sub("W[0-9]+$","",meta$well_id)
-meta$batch_id <- sub("-.+","",meta$chip_id)
+meta$batch_id <- in_batch
 meta$pbmc_sample_id <- in_sample
+if(grepl("PB([0-9]+)-[0-9]+", in_sample)) {
+  meta$sample.sampleKitGuid <- sub("PB([0-9]+)-[0-9]+", "KT\\1", in_sample)
+}
 ```
 
 #### Filter metadata based on cutoffs
@@ -891,9 +910,31 @@ qc_table(barcode_qc_stats)
 <a id="fragment_stats"></a>
 
 #### Fragment QC stats
+
 ```{r}
-if(file.exists(in_sum)) {
+# metrics used for QC:
+# num_fragments, frac_waste_mitochondrial, total_usable_fragments
+if(pipeline_type %in% c("arc_v1","atac_v1")) {
   metrics_summary <- read.csv(in_sum)
+} else if(pipeline_type == "atac_v2") {
+  metrics_summary <- read.csv(in_sum)
+  metrics_summary$num_fragments <- metrics_summary[["Pre-Normalization total mapped read pairs"]]
+  
+  # No frac_waste_mitochondrial from cellranger-atac v2.0
+  metrics_summary$frac_waste_mitochondrial <- 0
+  stm("WARNING: Mitochondrial fragments not computed for cellranger-atac v2.0")
+  warning("WARNING: Mitochondrial fragments not computed for cellranger-atac v2.0")
+  
+  metrics_summary$total_usable_fragments <- metrics_summary[["Pre-Normalization unique fragments in library"]]
+}
+```
+
+
+
+```{r}
+if(pipeline_type %in% c("arc_v1","atac_v1","atac_v2")) {
+  
+
   
   saturation_counts_file <- list.files(in_pre, pattern = "_saturation_curve.tsv.gz", full.names = TRUE)
   
@@ -930,7 +971,7 @@ if(file.exists(in_sum)) {
   qc_list$fragment_qc_stats$metric <- c("total_frags","mito_frags",
                                         "total_frags_gt1k","total_frags_pass_qc","total_frags_fail_qc",
                                         "unique_frags","unique_frags_gt1k","unique_frags_pass_qc","unique_frags_fail_qc")
-} else {
+} else if(pipeline_type == "non_cr") {
   saturation_counts <- fread(paste0(in_prefix, "_saturation_curve.tsv.gz"),
                              header = F,
                              col.names = c("count", "frequency"))
@@ -960,7 +1001,7 @@ qc_table(fragment_qc_stats)
 
 #### Saturation metrics
 ```{r}
-if(file.exists(in_sum)) {
+if(pipeline_type %in% c("arc_v1", "atac_v1", "atac_v2")) {
   stm("Generating library diversity projection")
   
   saturation_mat <- as.matrix(as.data.frame(saturation_counts))
@@ -999,7 +1040,7 @@ if(file.exists(in_sum)) {
 
 #### Output projection values
 ```{r}
-if(file.exists(in_sum)){
+if(pipeline_type %in% c("arc_v1", "atac_v1", "atac_v2")){
   out_proj <- paste0(out_prefix, "saturation_projection.csv.gz")
 
   stm(paste("Writing Saturation Projection to", out_proj))
@@ -1012,7 +1053,7 @@ if(file.exists(in_sum)){
 
 #### Compute Break-points for specific ratios of raw reads to UMIs or signal UMIs
 ```{r}
-if(file.exists(in_sum)) {
+if(pipeline_type %in% c("arc_v1", "atac_v1", "atac_v2")) {
   # 2:1, 3:1, and 4:1 break points for total UMIs
   saturation_break_idx <- sapply(2:4, function(x) which.min(abs(saturation_projection$ratio-x)))
   
@@ -1037,7 +1078,7 @@ if(file.exists(in_sum)) {
 
 #### Display Break points for saturation of UMIs
 ```{r}
-if(file.exists(in_sum)) {
+if(pipeline_type %in% c("arc_v1", "atac_v1", "atac_v2")) {
   # Abbreviated table for display
   saturation_qc <- data.frame(break_target = saturation_breaks$value,
                               umi_ratio = round(saturation_breaks$ratio,2),
@@ -1054,7 +1095,7 @@ if(file.exists(in_sum)) {
 
 #### Display Break points for saturation of signal UMIs
 ```{r}
-if(file.exists(in_sum)) {
+if(pipeline_type %in% c("arc_v1", "atac_v1", "atac_v2")) {
   signal_qc <- data.frame(break_target = signal_breaks$value,
                           signal_ratio = round(signal_breaks$signal_ratio, 2),
                           M_raw_reads = signal_breaks$M_raw_reads,
@@ -1069,7 +1110,7 @@ if(file.exists(in_sum)) {
 
 #### Saturation summary by sequencing depth
 ```{r}
-if(file.exists(in_sum)) {
+if(pipeline_type %in% c("arc_v1", "atac_v1", "atac_v2")) {
   regular_break_idx <- which(saturation_projection$M_raw_reads %in% seq(200, 2000, by = 200))
   
   regular_qc <- data.frame(umi_ratio = round(saturation_projection$ratio[regular_break_idx], 2),
@@ -1090,7 +1131,8 @@ if(file.exists(in_sum)) {
 
 #### 10x Metrics
 ```{r}
-if(file.exists(in_sum)) {
+if(pipeline_type %in% c("arc_v1", "atac_v1", "atac_v2")) {
+  
   tenx_metrics <- data.frame(metric = names(metrics_summary),
                              values = round(unlist(as.numeric(metrics_summary[1,])), 4))
   
@@ -1110,7 +1152,7 @@ if(file.exists(in_sum)) {
 
 #### Plot Library Saturation
 ```{r}
-if(file.exists(in_sum)) {
+if(pipeline_type %in% c("arc_v1", "atac_v1", "atac_v2")) {
   reference_projections <- fread(system.file("reference/saturation/reference_projections.csv",
                                              package = "ATAComb"))
   reference_projections$dataset <- paste0("ref_",reference_projections$dataset)
@@ -1169,7 +1211,7 @@ if(file.exists(in_sum)) {
 
 #### Plot saturation of signal UMIs
 ```{r}
-if(file.exists(in_sum)) {
+if(pipeline_type %in% c("arc_v1", "atac_v1", "atac_v2")) {
   signal_saturation_plot <- ggplot() +
     geom_line(data = reference_projections,
               aes(x = n_raw_reads,
