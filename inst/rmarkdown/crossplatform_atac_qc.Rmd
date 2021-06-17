@@ -919,7 +919,7 @@ if(pipeline_type %in% c("arc_v1","atac_v1")) {
 } else if(pipeline_type == "atac_v2") {
   metrics_summary <- read.csv(in_sum)
   metrics_summary$num_fragments <- metrics_summary$Sequenced.read.pairs
-  metrics_summary$frac_waste_mitochondrial <- metrics_summary$Non.nuclear
+  metrics_summary$frac_waste_mitochondrial <- metrics_summary$Non.nuclear.read.pairs
   metrics_summary$total_usable_fragments <- floor(metrics_summary$num_fragments * (1 - metrics_summary$Percent.duplicates))
 }
 ```
