@@ -189,7 +189,7 @@ reference_names <- sub("_gr.rds","",reference_names)
 stm(paste(c("Available references:", reference_names), collapse = " "))
 
 feature_mat_files <- list.files(in_pre, pattern = paste0(in_sample,".+sparse_matrix.tsv.gz"), full.names = TRUE)
-feature_mat_names <- sub(paste0(in_sample,"(.+)_sparse_matrix.tsv.gz"),"\\1", basename(feature_mat_files))
+feature_mat_names <- sub(paste0(in_sample,"_(.+)_sparse_matrix.tsv.gz"),"\\1", basename(feature_mat_files))
 #feature_mat_names <- sub("[^_]+_", "", feature_mat_names)
 stm(paste(c("Available reference matrices:", feature_mat_names), collapse = " "))
 
