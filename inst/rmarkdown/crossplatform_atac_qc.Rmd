@@ -511,7 +511,7 @@ stm("Generating Cell IDs")
 # cellranger-atac and non-cellranger will have "None" in barcodes column
 # cellranger-arc metadata that's been pre-processed will already have UUIds in this column.
 if(pipeline_type %in% c("atac_v1", "atac_v2", "non_cr")) {
-    tenx_meta$barcodes <- ids::uuid(nrow(tenx_meta),
+    meta$barcodes <- ids::uuid(nrow(tenx_meta),
                                     drop_hyphens = TRUE, 
                                     use_time = TRUE)
 }
