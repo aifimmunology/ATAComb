@@ -202,7 +202,7 @@ multigrep <- function(targets,
       if(grepl(pat, target)) {
         res <- c(res, target)
         names(res)[length(res)] <- names(patterns)[p]
-        targets <- targets[-t]
+        break
       }
     }
   }
