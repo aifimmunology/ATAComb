@@ -366,12 +366,8 @@ stm(paste0("ArchR: ArrowFile generated at ", ArrowFile))
 
 ```
 
-#### Score and filter doublets
+#### Assemble ArchRProject
 ```{r}
-stm("ArchR: Scoring doublets")
-doublet_scores <- addDoubletScores(input = ArrowFile,
-                                   force = TRUE)
-
 proj <- ArchRProject(ArrowFiles = ArrowFile,
                      copyArrows = TRUE)
 
@@ -415,12 +411,6 @@ stm(paste0("ArchR: Doublet barcodes = ", n_doublets))
 # Match order to archr file
 rownames(filtered_meta) <- filtered_meta$barcodes
 filtered_meta <- filtered_meta[archr_barcodes,]
-
-# Add additional ArchR metadata to filtered_meta
-filtered_meta$DoubletScore <- archr_meta[["DoubletScore"]]
-filtered_meta$DoubletEnrichment <- archr_meta[["DoubletEnrichment"]]
-filtered_meta$singlet <- archr_meta[["singlet"]]
-filtered_meta$TSSEnrichment <- archr_meta[["TSSEnrichment"]]
 ```
 
 #### Save Archr project and shift arrow to output directory
