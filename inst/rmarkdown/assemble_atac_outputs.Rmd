@@ -208,7 +208,9 @@ feature_mat_files <- list.files(in_pre, pattern = ".+sparse_matrix.tsv.gz", full
 feature_mat_files <- match_ref(reference_patterns, feature_mat_files)
 feature_mat_names <- names(feature_mat_files)
 
-stm(paste(c("Preprocessed reference data:", feature_mat_names), collapse = " "))
+matching_refs <- feature_mat_names
+
+stm(paste(c("Preprocessed reference data:", matching_refs), collapse = " "))
 
 if(length(matching_refs) == 0) {
   stop("Preprocessed reference datasets do not match available references")
