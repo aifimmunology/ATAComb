@@ -191,40 +191,27 @@ stm(paste(c("Available references:", reference_names), collapse = " "))
 reference_patterns <- paste0("_",reference_names,"_")
 names(reference_patterns) <- reference_names
 
-multigrep <- function(targets,
-                      patterns) {
+match_ref <- function(patterns, targets) {
   res <- targets[0]
-  for(p in 1:length(patterns)) {
-    for(t in 1:length(targets)) {
-      pat <- patterns[p]
-      target <- targets[t]
-      
-      if(grepl(pat, target)) {
-        res <- c(res, target)
-        names(res)[length(res)] <- names(patterns)[p]
-        break
-      }
+  for(i in seq_along(patterns)) {
+    pat <- patterns[i]
+    matches <- grepl(pat, targets)
+    if(sum(matches) > 0) {
+      res <- c(res, targets[matches][1])
+      names(res)[length(res)] <- names(patterns)[i]
     }
   }
   res
 }
 
 feature_mat_files <- list.files(in_pre, pattern = ".+sparse_matrix.tsv.gz", full.names = TRUE)
-feature_mat_files <- multigrep(feature_mat_files, reference_patterns)
+feature_mat_files <- match_ref(reference_patterns, feature_mat_files)
 feature_mat_names <- names(feature_mat_files)
 
-stm(paste(c("Available reference matrices:", feature_mat_names), collapse = " "))
-
-matching_refs <- intersect(reference_names, feature_mat_names)
-stm(paste(c("Preprocessed reference data:", matching_refs), collapse = " "))
+stm(paste(c("Preprocessed reference data:", feature_mat_names), collapse = " "))
 
 if(length(matching_refs) == 0) {
   stop("Preprocessed reference datasets do not match available references")
-} else {
-  reference_files <- reference_files[match(matching_refs, reference_names)]
-  reference_names <- matching_refs
-  feature_mat_files <- feature_mat_files[match(matching_refs, feature_mat_names)]
-  feature_mat_names <- matching_refs
 }
 
 if(refs == "all") {
@@ -256,7 +243,6 @@ if(refs == "all") {
     stm(paste0("WARNING: Reference input(s) ",bad_refs," do not match available references. Skipping."))
   }
 }
-
 ```
 
 #### Check window sizes
