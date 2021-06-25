@@ -384,28 +384,16 @@ stm(paste0("ArchR: Project ArrowFile located at ", proj_ArrowFile))
 archr_names <- getCellNames(proj)
 archr_barcodes <- sub(".+#","",archr_names)
 
-# Check for doublet scoring
-# This will be FALSE in the case of small test datasets
-if(min(doublet_scores[[1]]$doubletEnrich) >= 1) {
-  stm("WARNING: DOUBLET SCORING FAILED.")
-}
-
 # Get counts for reporting
 n_total <- nrow(filtered_meta)
 
 stm(paste0("ArchR: Total barcodes = ", n_total))
 
-proj2 <- filterDoublets(proj)
-filtered_names <- getCellNames(proj2)
-
-archr_meta <- archr_meta %>%
-  dplyr::mutate(singlet = archr_names %in% filtered_names)
-
-n_singlets <- sum(archr_meta$singlet)
+n_singlets <- sum(filtered_meta$singlet)
 
 stm(paste0("ArchR: Singlet barcodes = ", n_singlets))
 
-n_doublets <-  sum(!archr_meta$singlet)
+n_doublets <-  n_total - n_singlets
 stm(paste0("ArchR: Doublet barcodes = ", n_doublets))
 
 # Match order to archr file
