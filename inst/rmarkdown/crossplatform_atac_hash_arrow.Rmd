@@ -54,6 +54,7 @@ if(is.null(params$in_frag)) {
   window_sizes <- params$window_sizes
   out_dir <- params$out_dir
 }
+
   
 # Check Genome
 if(!genome %in% c("hg38","hg19")) {
@@ -134,6 +135,37 @@ in_batch <- samplesheet$BatchID[1]
 in_pool <- samplesheet$PoolID[1]
 out_prefix <- file.path(out_dir, paste0(in_batch, "-", in_pool, "_", in_sample))
 names(out_prefix) <- in_sample
+
+in_batch=samplesheet$BatchID[1]
+in_pool=samplesheet$PoolID[1]
+out_prefix <- file.path(out_dir, paste0(in_batch, "_", in_sample, "_", in_pool, "_"))
+names(out_prefix)=in_sample
+
+```
+
+
+[Return to Contents](#contents)
+
+<a id="assemble_meta"></a>
+
+### Generate Metadata
+
+#### Read metadata sources
+```{r}
+
+#stm(paste0("Reading merged hashed metadata from ", in_meta))
+
+# if(grepl("singlecell.csv", in_sin)) {
+#   tenx_meta <- fread(in_sin)[-1,]
+#   tenx_meta <- tenx_meta[, list(cell_id, barcode, total, duplicate, mitochondrial , passed_filters)]
+#   names(tenx_meta) <- c("barcodes","original_barcodes","n_fragments","n_duplicate","n_mito","n_unique")
+# } else if(grepl("barcode_counts.tsv", in_sin)) {
+#   stm("Using barcode_counts.tsv")
+#   tenx_meta <- fread(in_sin)
+#   names(tenx_meta) <- c("original_barcodes", "n_fragments")
+#   tenx_meta$n_unique <- tenx_meta$n_fragments
+#   tenx_meta$barcodes <- "None"
+# }
 ```
 
 [Return to Contents](#contents)
