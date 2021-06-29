@@ -11,8 +11,7 @@ output:
 params:
   in_frag: NULL
   in_meta: NULL
-  in_key: NULL
-  in_well: NULL
+  in_pre: NULL
   genome: NULL
   refs: NULL
   window_sizes: NULL
@@ -44,12 +43,15 @@ stm("Starting scATAC-seq Arrow")
 #### Argument parsing
 ```{r Parse arguments}
 if(is.null(params$in_frag)) {
-  stm(paste0("ERROR: No Inputs"))
+  stm("ERROR: No Inputs")
+  stop("ERROR: No Inputs")
 } else {
   in_frag <- params$in_frag
   in_meta <- params$in_meta
-  in_key <- params$in_key
+  in_pre <- params$in_pre
   genome <- params$genome
+  in_refs <- params$refs
+  window_sizes <- params$window_sizes
   out_dir <- params$out_dir
 }
 
@@ -60,10 +62,9 @@ if(!genome %in% c("hg38","hg19")) {
   stop()
 }
 
-
-stm(paste0("IN  Fragments dir    : ", in_frag))
-stm(paste0("IN  Metadata dir     : ", in_meta))
-stm(paste0("IN  SampleSheet      : ", in_key))
+stm(paste0("IN  fragments.tsv.gz : ", in_frag))
+stm(paste0("IN  metadata.csv.gz  : ", in_meta))
+stm(paste0("IN  preprocessed dir : ", in_pre))
 stm(paste0("IN  Genome           : ", genome))
 stm(paste0("OUT Directory        : ", out_dir))
 ```
@@ -107,7 +108,6 @@ addArchRGenome(genome)
    stm(paste0("ERROR: Cannot find IN SampleSheet file:", in_key))
    stop()
  }
-
 ```
 
 
@@ -123,9 +123,6 @@ if(!dir.exists(out_dir)) {
 
 [Return to Contents](#contents)
 
-
-
-
 #### Load SampleSheet
 ```{r Load SampleSheet}
 stm(paste0("Reading SampleSheet from ", in_key))
@@ -133,6 +130,11 @@ stm(paste0("Reading SampleSheet from ", in_key))
 samplesheet <- read.csv(in_key)
 
 in_sample <- as.character(samplesheet$SampleID)
+
+in_batch <- samplesheet$BatchID[1]
+in_pool <- samplesheet$PoolID[1]
+out_prefix <- file.path(out_dir, paste0(in_batch, "-", in_pool, "_", in_sample))
+names(out_prefix) <- in_sample
 
 in_batch=samplesheet$BatchID[1]
 in_pool=samplesheet$PoolID[1]
@@ -165,7 +167,6 @@ names(out_prefix)=in_sample
 #   tenx_meta$barcodes <- "None"
 # }
 ```
-
 
 [Return to Contents](#contents)
 
