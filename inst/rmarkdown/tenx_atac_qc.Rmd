@@ -106,8 +106,7 @@ if(is.null(params$in_pre)) {
   out_dir <- params$out_dir
 }
 
-in_well <- sub("-[AHR]?P","-AP",in_well)
-in_batch <- sub("-.+","",in_well)
+in_pool <- sub("C.W.","",in_well)
 
 # Check Well ID format
 if(!grepl("^[A-Z|-]+[0-9]+-.?P[0-9]C[0-9]W[0-9]$", in_well)) {
@@ -384,7 +383,7 @@ in_sample <- as.character(samplesheet$SampleID[samplesheet$WellID == in_well])
 
 stm(paste0("SampleSheet WellID: ", in_well, "; SampleID: ", in_sample))
 
-out_prefix <- file.path(out_dir, paste0(in_batch, "_", in_sample, "_"))
+out_prefix <- file.path(out_dir, paste0(in_pool, "_", in_sample, "_"))
 ```
 
 
