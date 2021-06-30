@@ -9,7 +9,7 @@ output:
     df_print: paged
     self_contained: true
 params:
-  in_pre: NULL
+  in_post: NULL
   in_frag: NULL
   in_meta: NULL
   genome: NULL
@@ -84,8 +84,8 @@ stm("Starting scATAC-seq assembly")
 
 #### Argument parsing
 ```{r Parse arguments}
-if(is.null(params$in_pre)) {
-  in_pre <- system.file("testdata/preprocessed", package = "ATAComb")
+if(is.null(params$in_post)) {
+  in_post <- system.file("testdata/preprocessed", package = "ATAComb")
   in_frag <- system.file("testdata/outs/fragments.tsv.gz", package = "ATAComb")
   in_meta <- system.file("testdata/batch_qc/X055_X055-AP0C1W1_filtered_metadata.csv.gz", package = "ATAComb")
   genome <- "hg38"
@@ -93,7 +93,7 @@ if(is.null(params$in_pre)) {
   window_sizes <- "all"
   out_dir <- tempdir()
 } else {
-  in_pre <- params$in_pre
+  in_post <- params$in_post
   in_frag <- params$in_frag
   in_meta <- params$in_meta
   genome <- params$genome
@@ -116,7 +116,7 @@ if(is.null(window_sizes)) {
   window_sizes <- "all"
 }
 
-stm(paste0("IN  preprocessed dir          : ", in_pre))
+stm(paste0("IN  preprocessed dir          : ", in_post))
 stm(paste0("IN  filtered_fragments.tsv.gz : ", in_frag))
 stm(paste0("IN  filtered_metadata.csv.gz  : ", in_meta))
 stm(paste0("IN  Genome                    : ", genome))
@@ -128,7 +128,7 @@ stm(paste0("OUT Directory                 : ", out_dir))
 #### Input Parameters
 ```{r Print Arguments}
 print(c(
-  paste0("IN  preprocessed dir          : ", in_pre),
+  paste0("IN  preprocessed dir          : ", in_post),
   paste0("IN  filtered_fragments.tsv.gz : ", in_frag),
   paste0("IN  filtered_metadata.csv.gz  : ", in_meta),
   paste0("IN  Genome                    : ", genome),
@@ -154,8 +154,8 @@ addArchRGenome(genome)
 
 #### Check Input Files
 ```{r Check Inputs}
-if(!dir.exists(in_pre)) {
-  stm(paste0("ERROR: Cannot find IN preprocessed dir:", in_pre))
+if(!dir.exists(in_post)) {
+  stm(paste0("ERROR: Cannot find IN preprocessed dir:", in_post))
   stop()
 }
 if(!file.exists(in_frag)) {
@@ -169,7 +169,7 @@ if(!file.exists(in_meta)) {
 
 in_sample <- sub("_fragments.tsv.gz", "", basename(in_frag))
 in_sample <- sub("_filtered", "", in_sample)
-in_prefix <- in_pre
+in_prefix <- in_post
 
 stm(paste0("Using Sample Name:", in_sample))
 
@@ -204,7 +204,7 @@ match_ref <- function(patterns, targets) {
   res
 }
 
-feature_mat_files <- list.files(in_pre, pattern = ".+sparse_matrix.tsv.gz", full.names = TRUE)
+feature_mat_files <- list.files(in_post, pattern = ".+sparse_matrix.tsv.gz", full.names = TRUE)
 feature_mat_files <- match_ref(reference_patterns, feature_mat_files)
 feature_mat_names <- names(feature_mat_files)
 
@@ -249,7 +249,7 @@ if(refs == "all") {
 
 #### Check window sizes
 ```{r}
-window_mat_files <- list.files(in_pre, pattern = paste0(in_sample, ".+window.+counts.tsv.gz"), full.names = TRUE)
+window_mat_files <- list.files(in_post, pattern = paste0(in_sample,".+window.+counts.tsv.gz"), full.names = TRUE)
 window_mat_names <- sub(paste0(in_sample,"_(.+)_counts.tsv.gz"),"\\1",basename(window_mat_files))
 #window_mat_names <- sub("[^_]+_", "", window_mat_names)
 stm(paste(c("Available window matrices:", window_mat_names), collapse = " "))
@@ -662,7 +662,7 @@ qc_table(barcode_qc_stats)
 
 #### Plot Fragment Widths
 ```{r}
-frag_widths_file <- list.files(in_pre, pattern = paste0(in_sample, ".+fragment_widths.tsv.gz"), full.names = TRUE)
+frag_widths_file <- list.files(in_post, pattern = paste0(in_sample, ".+fragment_widths.tsv.gz"), full.names = TRUE)
 
 frag_widths <- fread(frag_widths_file,
                      header = FALSE,
