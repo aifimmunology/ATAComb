@@ -527,7 +527,7 @@ stm("Adding Batch and Sample ID metadata")
 meta$well_id <- in_well
 meta$pool_id <- sub("C[0-9]W[0-9]+$","",meta$well_id)
 meta$chip_id <- sub("W[0-9]+$","",meta$well_id)
-meta$batch_id <- in_batch
+meta$batch_id <- sub("-.+","",meta$well_id)
 meta$pbmc_sample_id <- in_sample
 if(grepl("PB([0-9]+)-[0-9]+", in_sample)) {
   meta$sample.sampleKitGuid <- sub("PB([0-9]+)-[0-9]+", "KT\\1", in_sample)
