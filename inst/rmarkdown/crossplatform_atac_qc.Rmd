@@ -115,7 +115,7 @@ if(!grepl("^[A-Z|-]+[0-9]+-.?P[0-9]C[0-9]W[0-9]$", in_well)) {
   stop()
 }
 
-in_batch <- sub("-.?P.+","",in_well)
+in_pool <- sub("-.?P(.)C.W.","-P\\1",in_well)
 
 # Check Genome
 if(!genome %in% c("hg38","hg19")) {
@@ -443,7 +443,7 @@ in_sample <- as.character(samplesheet$SampleID[samplesheet$WellID == in_well])
 
 stm(paste0("SampleSheet WellID: ", in_well, "; SampleID: ", in_sample))
 
-out_prefix <- file.path(out_dir, paste0(in_batch, "_", in_sample, "_"))
+out_prefix <- file.path(out_dir, paste0(in_pool, "_", in_sample, "_"))
 ```
 
 
