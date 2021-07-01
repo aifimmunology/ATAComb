@@ -581,23 +581,6 @@ walk(seq_along(window_mat_files),
 
 [Return to Contents](#contents)
 
-<a id="json_out"></a>
-
-### Write QC JSON
-
-```{r Save QC JSON}
-stm(paste0("Writing JSON to ",out_json))
-
-qc_list_json <- jsonlite::toJSON(qc_list,
-                                 auto_unbox = TRUE,
-                                 pretty = TRUE)
-
-writeLines(qc_list_json,
-           out_json)
-```
-
-[Return to Contents](#contents)
-
 <a id="session_info"></a>
 
 ## Session Information
