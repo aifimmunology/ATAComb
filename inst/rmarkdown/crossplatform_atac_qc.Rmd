@@ -439,6 +439,11 @@ stm(paste0("Reading SampleSheet from ", in_key))
 
 samplesheet <- read.csv(in_key)
 
+if(!in_well %in% samplesheet$WellID) {
+  stm(paste0("ERROR: Could not find ",in_well, " in SampleSheet WellID column"))
+  stop(paste0("ERROR: Could not find ",in_well, " in SampleSheet WellID column"))
+}
+
 in_sample <- as.character(samplesheet$SampleID[samplesheet$WellID == in_well])
 
 stm(paste0("SampleSheet WellID: ", in_well, "; SampleID: ", in_sample))
