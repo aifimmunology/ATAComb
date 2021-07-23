@@ -115,7 +115,7 @@ if(!grepl("^[A-Z|-]+[0-9]+-.?P[0-9]C[0-9]W[0-9]$", in_well)) {
   stop()
 }
 
-in_batch <- sub("-.?P.+","",in_well)
+in_pool <- sub("-.?P(.)C.W.","-P\\1",in_well)
 
 # Check Genome
 if(!genome %in% c("hg38","hg19")) {
@@ -439,11 +439,16 @@ stm(paste0("Reading SampleSheet from ", in_key))
 
 samplesheet <- read.csv(in_key)
 
+if(!in_well %in% samplesheet$WellID) {
+  stm(paste0("ERROR: Could not find ",in_well, " in SampleSheet WellID column"))
+  stop(paste0("ERROR: Could not find ",in_well, " in SampleSheet WellID column"))
+}
+
 in_sample <- as.character(samplesheet$SampleID[samplesheet$WellID == in_well])
 
 stm(paste0("SampleSheet WellID: ", in_well, "; SampleID: ", in_sample))
 
-out_prefix <- file.path(out_dir, paste0(in_batch, "_", in_sample, "_"))
+out_prefix <- file.path(out_dir, paste0(in_pool, "_", in_sample, "_"))
 ```
 
 
@@ -527,7 +532,7 @@ stm("Adding Batch and Sample ID metadata")
 meta$well_id <- in_well
 meta$pool_id <- sub("C[0-9]W[0-9]+$","",meta$well_id)
 meta$chip_id <- sub("W[0-9]+$","",meta$well_id)
-meta$batch_id <- in_batch
+meta$batch_id <- sub("-.+","",meta$well_id)
 meta$pbmc_sample_id <- in_sample
 if(grepl("PB([0-9]+)-[0-9]+", in_sample)) {
   meta$sample.sampleKitGuid <- sub("PB([0-9]+)-[0-9]+", "KT\\1", in_sample)

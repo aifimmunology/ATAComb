@@ -30,23 +30,6 @@ params:
 - [Output metadata](#meta_out)
 - [Generate Matrices](#mats)
 
-#### [QC Metrics](#qc_stats)
-- [Cell Barcode QC](#barcode_stats)
-- [Fragment Metrics](#fragment_stats)
-- [Saturation Metrics](#saturation_stats)
-- [10x Genomics Metrics](#tenx_stats)
-
-#### [QC Plots](#qc_plots)
-- [UMI Saturation Plot](#saturation_plot)
-- [Signal Saturation Plot](#signal_plot)
-- [Fragment Width Plot](#width_plot)
-- [All Cell Histograms](#all_hist_plot)
-- [Reads vs altius_frac Plot](#reads_altius_frac_plot)
-- [Reads vs peaks_frac Plot](#reads_peaks_frac_plot)
-- [peaks_frac vs tss_frac Plot](#peaks_frac_tss_frac_plot)
-- [RIP vs RITSS Plot](#rip_ritss_plot)
-- [Filtered Histograms](#filtered_hist_plot)
-
 [Write QC JSON](#json_out)
 
 #### [Session Info](#session_info)
@@ -85,7 +68,7 @@ stm("Starting scATAC-seq assembly")
 #### Argument parsing
 ```{r Parse arguments}
 if(is.null(params$in_post)) {
-  in_post <- system.file("testdata/preprocessed", package = "ATAComb")
+  in_post <- system.file("testdata/postprocessed", package = "ATAComb")
   in_frag <- system.file("testdata/outs/fragments.tsv.gz", package = "ATAComb")
   in_meta <- system.file("testdata/batch_qc/X055_X055-AP0C1W1_filtered_metadata.csv.gz", package = "ATAComb")
   genome <- "hg38"
@@ -116,7 +99,7 @@ if(is.null(window_sizes)) {
   window_sizes <- "all"
 }
 
-stm(paste0("IN  preprocessed dir          : ", in_post))
+stm(paste0("IN  postprocessed dir          : ", in_post))
 stm(paste0("IN  filtered_fragments.tsv.gz : ", in_frag))
 stm(paste0("IN  filtered_metadata.csv.gz  : ", in_meta))
 stm(paste0("IN  Genome                    : ", genome))
@@ -128,7 +111,7 @@ stm(paste0("OUT Directory                 : ", out_dir))
 #### Input Parameters
 ```{r Print Arguments}
 print(c(
-  paste0("IN  preprocessed dir          : ", in_post),
+  paste0("IN  postprocessed dir          : ", in_post),
   paste0("IN  filtered_fragments.tsv.gz : ", in_frag),
   paste0("IN  filtered_metadata.csv.gz  : ", in_meta),
   paste0("IN  Genome                    : ", genome),
@@ -155,7 +138,7 @@ addArchRGenome(genome)
 #### Check Input Files
 ```{r Check Inputs}
 if(!dir.exists(in_post)) {
-  stm(paste0("ERROR: Cannot find IN preprocessed dir:", in_post))
+  stm(paste0("ERROR: Cannot find IN postprocessed dir:", in_post))
   stop()
 }
 if(!file.exists(in_frag)) {
@@ -210,10 +193,10 @@ feature_mat_names <- names(feature_mat_files)
 
 matching_refs <- feature_mat_names
 
-stm(paste(c("Preprocessed reference data:", matching_refs), collapse = " "))
+stm(paste(c("postprocessed reference data:", matching_refs), collapse = " "))
 
 if(length(matching_refs) == 0) {
-  stop("Preprocessed reference datasets do not match available references")
+  stop("postprocessed reference datasets do not match available references")
 }
 
 if(refs == "all") {
@@ -594,163 +577,6 @@ walk(seq_along(window_mat_files),
        
        rm(window_list)
      })
-```
-
-[Return to Contents](#contents)
-
-<a id="qc_stats"></a>
-
-### QC Stats
-
-```{r}
-qc_list <- list(report_type = "atac_qc",
-                report_datetime = as.character(start_time),
-                report_uuid = ids::uuid(use_time = TRUE),
-                package = "ATAComb",
-                package_version = sessionInfo()$otherPkgs$ATAComb$Version)
-
-out_json <- paste0(out_prefix, "atac_qc_metrics.json")
-```
-
-[Return to Contents](#contents)
-
-<a id="barcode_stats"></a>
-
-#### Barcode QC Stats
-```{r}
-barcode_conditions <- list(
-  "pass_qc" = rep(TRUE, nrow(filtered_meta)),
-  "doublets" = !filtered_meta$singlet,
-  "singlets" = filtered_meta$singlet
-)
-
-perc_of <- function(x, d) {
-  round(sum(x) / d * 100, 2)
-}
-
-q_of <- function(x, target, q) {
-  vals <- target[x]
-  round(quantile(vals, probs = q), 4)
-}
-
-barcode_qc_stats <- data.frame(
-  metric = c("Barcodes pass QC",
-             "Doublets pass QC",
-             "Singlets pass QC"),
-  count = sapply(barcode_conditions, sum),
-  percent = sapply(barcode_conditions, perc_of, nrow(filtered_meta)),
-  median_fragments = sapply(barcode_conditions, q_of, filtered_meta$n_fragments, .50),
-  median_unique = sapply(barcode_conditions, q_of, filtered_meta$n_unique, .50),
-  median_altius_frac = sapply(barcode_conditions, q_of, filtered_meta$altius_frac, .50),
-  median_peaks_frac = sapply(barcode_conditions, q_of, filtered_meta$peaks_frac, .50),
-  median_tss_frac = sapply(barcode_conditions, q_of, filtered_meta$tss_frac, .50))
-
-qc_list$barcode_qc_stats <- as.list(barcode_qc_stats)
-qc_list$barcode_qc_stats$metric <- c("barcodes_gt1k","barcodes_pass_qc","barcodes_fail_qc",
-                                     "barcodes_fail_altius_frac","barcodes_fail_peaks_frac","barcodes_fail_tss_frac","barcodes_fail_all")
-
-qc_table(barcode_qc_stats)
-```
-
-[Return to Contents](#contents)
-
-<a id="qc_plots"></a>
-
-### QC Plots
-
-<a id="width_plot"></a>
-
-#### Plot Fragment Widths
-```{r}
-frag_widths_file <- list.files(in_post, pattern = paste0(in_sample, ".+fragment_widths.tsv.gz"), full.names = TRUE)
-
-frag_widths <- fread(frag_widths_file,
-                     header = FALSE,
-                     col.names = c("barcodes", "width", "count"),
-                     colClasses = list("character" = 1,
-                                       "integer" = c(2,3)))
-
-frag_widths$singlet <- ifelse(frag_widths$barcodes %in% filtered_meta$barcodes[filtered_meta$singlet],
-                              "singlet",
-                              "doublet")
-frag_widths <- frag_widths[, sum(count), by = list(singlet, width)]
-names(frag_widths)[3] <- "totals"
-frag_widths <- frag_widths[, frac:=totals/sum(totals), by = list(singlet)]
-frag_widths <- frag_widths[width <= 750]
-
-out_widths <- paste0(out_prefix, "fragment_width_summary.csv.gz") 
-
-stm(paste("Writing fragment width summary to", out_widths))
-fwrite(frag_widths, out_widths)
-
-ggplot(data = frag_widths) +
-  geom_line(aes(x = width,
-                y = frac,
-                group = singlet,
-                color = singlet),
-            size = 1) +
-  xlim(0, 750) +
-  facet_grid(rows = vars(singlet)) +
-  theme_bw()
-```
-
-[Return to Contents](#contents)
-
-<a id="filtered_hist_plot"></a>
-
-#### Filtered QC Histograms
-```{r}
-cutoffs <- list(altius_frac = 0.5, peaks_frac = 0.2, tss_frac = 0.2)
-
-n_reads_hist <- qc_hist_plot(filtered_meta,
-                             column = "n_unique",
-                             name_x = "N Unique Fragments per Cell",
-                             log_x = TRUE,
-                             fill = "dodgerblue",
-                             target = 2500,
-                             y_max = 1000)
-altius_frac_hist <- qc_frac_hist_plot(filtered_meta,
-                                      column = "altius_frac",
-                                      name_x = "Frac Reads in Altius Index (altius_frac)",
-                                      fill = "darkgreen",
-                                      target = cutoffs$altius_frac,
-                                      y_max = 8000)
-peaks_frac_hist <- qc_frac_hist_plot(filtered_meta,
-                                     column = "peaks_frac",
-                                     name_x = "Frac Reads in Peaks (peaks_frac)",
-                                     fill = "mediumorchid3",
-                                     target = cutoffs$peaks_frac,
-                                     y_max = 5000)
-tss_frac_hist <- qc_frac_hist_plot(filtered_meta,
-                                   column = "tss_frac",
-                                   name_x = "Frac Reads in TSS (tss_frac)",
-                                   fill = "orangered",
-                                   target = cutoffs$tss_frac,
-                                   y_max = 5000)
-plot_list <- list(n_reads_hist,
-                  altius_frac_hist,
-                  peaks_frac_hist,
-                  tss_frac_hist)
-
-cowplot::plot_grid(plotlist = plot_list,
-                   nrow = 4, ncol = 1)
-```
-
-[Return to Contents](#contents)
-
-<a id="json_out"></a>
-
-### Write QC JSON
-
-```{r Save QC JSON}
-stm(paste0("Writing JSON to ",out_json))
-
-qc_list_json <- jsonlite::toJSON(qc_list,
-                                 auto_unbox = TRUE,
-                                 pretty = TRUE)
-
-writeLines(qc_list_json,
-           out_json)
 ```
 
 [Return to Contents](#contents)
