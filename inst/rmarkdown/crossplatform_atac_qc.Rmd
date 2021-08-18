@@ -224,7 +224,7 @@ if(!dir.exists(in_tenx)) {
   } else {
     in_sum <- file.path(in_tenx, "summary.csv")
   }
-
+  
   if(file.exists(in_sum)) {
     stm(paste("Found summary.csv file:", in_sum))
   } else {
@@ -258,11 +258,11 @@ in_prefix <- file.path(in_pre, in_well)
 #### Check reference overlap files
 ```{r}
 reference_files <- list.files(system.file("reference", package = "ATAComb"), 
-                                pattern = paste0(genome, ".+gr.rds"),
-                                full.names = TRUE)
+                              pattern = paste0(genome, ".+gr.rds"),
+                              full.names = TRUE)
 reference_names <- sub(paste0(".+",genome,"_"),"",reference_files)
 reference_names <- sub("_gr.rds","",reference_names)
-  
+
 stm(paste(c("Available references:", reference_names), collapse = " "))
 
 if(!qc_only) {
@@ -366,8 +366,7 @@ if(!dir.exists(out_dir)) {
 #### Declare QC Cutoffs
 ```{r}
 cutoffs <- list(altius_frac = 0.5,
-                tss_frac = 0.2,
-                peaks_frac = 0.2)
+                tss_frac = 0.2)
 
 stm("Using QC Cutoffs:")
 walk(seq_along(cutoffs),
@@ -430,7 +429,7 @@ if(!qc_only) {
                         })
   
   names(reference_meta) <- reference_names
-  }
+}
 ```
 
 #### Load SampleSheet
@@ -704,7 +703,7 @@ fwrite(filtered_meta, filtered_meta_out)
 ```{r Region Matrices}
 if(!qc_only) {
   stm("Building reference matrices")
-
+  
   obs_list <- as.list(filtered_meta[,names(filtered_meta) != "barcodes"])
   
   walk(seq_along(feature_mat_files),
@@ -1039,7 +1038,7 @@ if(pipeline_type %in% c("arc_v1", "atac_v1", "atac_v2")) {
 ```{r}
 if(pipeline_type %in% c("arc_v1", "atac_v1", "atac_v2")){
   out_proj <- paste0(out_prefix, "saturation_projection.csv.gz")
-
+  
   stm(paste("Writing Saturation Projection to", out_proj))
   print(paste("Writing Saturation Projection to", out_proj))
   
