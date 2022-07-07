@@ -15,6 +15,7 @@ params:
   genome: NULL
   refs: "all"
   window_sizes: "all"
+  n_cores: "auto"
   out_dir: NULL
 ---
 
@@ -82,6 +83,7 @@ if(is.null(params$in_post)) {
   genome <- params$genome
   refs <- params$refs
   window_sizes <- params$window_sizes
+  n_cores <- params$n_cores
   out_dir <- params$out_dir
 }
 
@@ -127,10 +129,12 @@ quiet_library(ArchR)
 
 stm("Setting ArchR parameters")
 set.seed(3030)
-
-available_cores <- parallel::detectCores()
+if(n_cores == "auto") {
+  available_cores <- parallel::detectCores()
+} else {
+  available_cores <- n_cores
+}
 stm(paste0("Using ",available_cores, " threads"))
-
 addArchRThreads(available_cores, force = TRUE)
 addArchRGenome(genome)
 ```
