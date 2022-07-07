@@ -132,7 +132,7 @@ set.seed(3030)
 if(n_cores == "auto") {
   available_cores <- parallel::detectCores()
 } else {
-  available_cores <- n_cores
+  available_cores <- as.numeric(n_cores)
 }
 stm(paste0("Using ",available_cores, " threads"))
 addArchRThreads(available_cores, force = TRUE)
