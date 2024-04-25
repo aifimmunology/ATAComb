@@ -444,6 +444,7 @@ if(!in_well %in% samplesheet$WellID) {
 }
 
 in_sample <- as.character(samplesheet$SampleID[samplesheet$WellID == in_well])
+in_kit <- as.character(samplesheet$sample.sampleKitGuid[samplesheet$WellID == in_well])
 
 stm(paste0("SampleSheet WellID: ", in_well, "; SampleID: ", in_sample))
 
@@ -533,6 +534,7 @@ meta$pool_id <- sub("C[0-9]W[0-9]+$","",meta$well_id)
 meta$chip_id <- sub("W[0-9]+$","",meta$well_id)
 meta$batch_id <- sub("-.+","",meta$well_id)
 meta$pbmc_sample_id <- in_sample
+meta$sample.sampleKitGuid <- in_kit
 #if(grepl("PB([0-9]+)-[0-9]+", in_sample)) {
 #  meta$sample.sampleKitGuid <- sub("PB([0-9]+)-[0-9]+", "KT\\1", in_sample)
 #}
