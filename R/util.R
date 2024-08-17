@@ -35,12 +35,12 @@ load_reference <- function(name = c("altius","gene_bodies","great","peaks","tss"
   format <- match.arg(format)
 
   if(format == "gr") {
-    suffix <- "gr.rds"
+    suffix <- "_gr.rds"
   } else if(format == "dt") {
-    suffix <- "bed.gz"
+    suffix <- ".bed.gz"
   }
 
-  filename <- paste(genome, name, suffix, sep = "_")
+  filename <- paste0(genome, "_", name, suffix)
   ref_path <- system.file("reference", package = "ATAComb")
 
   if(format == "gr") {
